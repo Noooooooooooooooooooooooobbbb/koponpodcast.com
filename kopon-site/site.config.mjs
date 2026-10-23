@@ -2,7 +2,7 @@
 //  Kop On! website settings — edit this file to change the site.
 // ─────────────────────────────────────────────────────────────────────────────
 export default {
-  siteUrl: 'https://kop-on-podcast.netlify.app', // no trailing slash
+  siteUrl: 'https://koponpodcast.com', // the site's main address
   title: 'Kop On! A Liverpool FC (LFC) podcast',
   shortTitle: 'Kop On!',
   welcome: 'Welcome to Kop On!',
@@ -25,12 +25,28 @@ export default {
   // Text in show notes after which listing excerpts stop (boilerplate)
   excerptStopMarkers: ['YNWA!! KOP ON YOUTUBE', 'KOP ON YOUTUBE', '“Kop On!” is a podcast'],
 
+  // ── YouTube Shorts on episode pages ─────────────────────────────────────
+  // New Shorts on the channel appear automatically on the episode they were
+  // posted after (within about 3 hours).
+  youtube: {
+    channelId: 'UC0dlhg-sM8HAbWvCcOiB0AQ',
+    shortsPerEpisode: 6,
+    // Put a Short on a specific episode yourself (paste YouTube links):
+    //   'Rio the Hero!': ['https://youtube.com/shorts/abcdefghijk'],
+    extraShorts: {},
+    // Shorts that should never appear on the site (links or IDs):
+    hideShorts: [],
+  },
+
   // ── Comments / forum ─────────────────────────────────────────────────────
-  // provider: 'hyvor' or 'remark42'. Leave the IDs empty to show a
-  // "coming soon" panel. You can also set them as Netlify environment
-  // variables instead: HYVOR_WEBSITE_ID, REMARK42_HOST, REMARK42_SITE_ID.
+  // provider: 'disqus' (free), 'cusdis' (free, small), 'hyvor' or 'remark42'.
+  // Leave the IDs empty to show a "coming soon" panel. Easiest: set them as
+  // Netlify environment variables instead (DISQUS_SHORTNAME, CUSDIS_APP_ID,
+  // HYVOR_WEBSITE_ID, REMARK42_HOST + REMARK42_SITE_ID).
   comments: {
-    provider: 'hyvor',
+    provider: 'disqus',
+    disqusShortname: '', // e.g. 'koponpodcast'
+    cusdisAppId: '',
     hyvorWebsiteId: '',
     remark42Host: '', // e.g. 'https://comments.example.com'
     remark42SiteId: 'remark',

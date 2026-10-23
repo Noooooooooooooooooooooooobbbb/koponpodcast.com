@@ -1,6 +1,6 @@
 // HTML templates for every page. Everything from the feed is escaped with esc().
 import { esc, jsonForScript, clock } from '../lib/text.mjs';
-import { renderWireList, renderNewsPage, pickDiverse } from './assets/news-render.js';
+import { renderNewsGrid, renderNewsPage, pickDiverse } from './assets/news-render.js';
 
 // ---- icons --------------------------------------------------------------------
 const I = {
@@ -47,8 +47,30 @@ export function epRow(ep, { showExcerpt = false, search = '' } = {}) {
   }<div class="ep-text"><a class="ep-title" href="${epUrl(ep)}">${esc(ep.title)}</a><span class="ep-meta"><time datetime="${esc(ep.dateIso)}">${esc(ep.dateShort)}</time>${ep.durationText ? ` · ${esc(ep.durationText)}` : ''}</span>${showExcerpt && ep.excerpt ? `<p class="ep-excerpt">${esc(ep.excerpt)}</p>` : ''}</div></li>`;
 }
 
+// ---- YouTube Shorts ----------------------------------------------------------------
+// Thumbnails only until someone presses play (no YouTube tracking before that)
+export function shortsBlock(ep) {
+  const list = ep.shorts || [];
+  if (!list.length) return '';
+  return `<section class="shorts" aria-labelledby="shorts-h">
+<h2 class="h2" id="shorts-h">Clips from this episode</h2>
+<div class="shorts-row" data-allow-scroll>${list.map((s) => `<div class="short"><button type="button" class="short-play" data-yt="${esc(s.id)}" aria-label="Play clip: ${esc(s.title)}"><img src="https://i.ytimg.com/vi/${esc(s.id)}/hqdefault.jpg" alt="" loading="lazy" decoding="async" width="480" height="360"><span class="short-icon" aria-hidden="true">${I.play}</span></button><a class="short-title" href="https://www.youtube.com/shorts/${esc(s.id)}">${esc(s.title)}</a></div>`).join('')}</div>
+</section>`;
+}
+
 // ---- comments ------------------------------------------------------------------
 export function commentsBlock(c, { pageId, url, title }) {
+  if (c.provider === 'disqus' && /^[a-z0-9-]+$/i.test(c.disqusShortname || '')) {
+    // Loads only when the visitor agrees (Disqus sets advertising cookies)
+    return `<div class="disqus" data-disqus="${esc(c.disqusShortname.toLowerCase())}" data-url="${esc(url)}" data-id="${esc(pageId)}" data-title="${esc(title)}">
+<div class="comments-gate"><p>The discussion is hosted by Disqus. You can sign in with Google, Facebook or X, or post as a guest. Showing it lets Disqus set cookies (<a href="https://help.disqus.com/en/articles/1717103-disqus-privacy-policy">Disqus privacy policy</a>).</p><button type="button" class="btn btn-primary disqus-load">Show the discussion</button></div>
+<div id="disqus_thread"></div>
+</div>`;
+  }
+  if (c.provider === 'cusdis' && c.cusdisAppId) {
+    return `<div id="cusdis_thread" data-host="https://cusdis.com" data-app-id="${esc(c.cusdisAppId)}" data-page-id="${esc(pageId)}" data-page-url="${esc(url)}" data-page-title="${esc(title)}" data-theme="dark"></div>
+<script async defer src="https://cusdis.com/js/cusdis.es.js"></script>`;
+  }
   if (c.provider === 'hyvor' && c.hyvorWebsiteId) {
     return `<hyvor-talk-comments website-id="${esc(c.hyvorWebsiteId)}" page-id="${esc(pageId)}" page-url="${esc(url)}" page-title="${esc(title)}" colors="dark" loading="lazy"></hyvor-talk-comments>
 <script async src="https://talk.hyvor.com/embed/embed.js" type="module"></script>`;
@@ -63,7 +85,27 @@ export function commentsBlock(c, { pageId, url, title }) {
 }
 
 // ---- layout ----------------------------------------------------------------------
+// Links to other websites open in a new tab; links within the site don't.
+export function externalLinksInNewTab(html, siteUrl) {
+  const own = siteUrl.replace(/^https?:\/\//, '').toLowerCase();
+  return html.replace(/<a\s([^>]*?)>/g, (tag, attrs) => {
+    const href = (attrs.match(/\bhref="([^"]*)"/) || [])[1] || '';
+    if (!/^(https?:)?\/\//i.test(href)) return tag;
+    const host = href.replace(/^(https?:)?\/\//i, '').split(/[/?#]/)[0].toLowerCase();
+    if (host === own || host === `www.${own}` || `www.${host}` === own) return tag;
+    let a = attrs;
+    if (!/\btarget=/.test(a)) a += ' target="_blank"';
+    if (/\brel="/.test(a)) { if (!/\brel="[^"]*\bnoopener\b/.test(a)) a = a.replace(/\brel="/, 'rel="noopener '); }
+    else a += ' rel="noopener"';
+    return `<a ${a}>`;
+  });
+}
+
 export function layout(ctx, page, content) {
+  return externalLinksInNewTab(layoutInner(ctx, page, content), ctx.config.siteUrl);
+}
+
+function layoutInner(ctx, page, content) {
   const { config, assets } = ctx;
   const url = config.siteUrl + page.path;
   const title = page.title ? `${page.title} | ${config.shortTitle}` : config.title;
@@ -74,6 +116,7 @@ export function layout(ctx, page, content) {
   const scripts = [
     `<script src="${assets['player.js']}" defer></script>`,
     page.search ? `<script src="${assets['search.js']}" defer></script>` : '',
+    content.includes('data-disqus=') ? `<script src="${assets['comments.js']}" defer></script>` : '',
     page.news ? `<script type="module" src="${assets['news.js']}"></script>` : '',
   ].join('');
 
@@ -151,17 +194,17 @@ const seriesLd = (config, show) => ({
 export function homePage(ctx) {
   const { config, episodes, news, show } = ctx;
   const latest = episodes[0];
-  const recent = episodes.slice(1, 6);
   const titleClass = latest.title.length > 40 ? ' is-xlong' : latest.title.length > 22 ? ' is-long' : '';
-  const wireItems = pickDiverse(news.items, 5, 2);
+  const homeNews = pickDiverse(news.items, 6, 2);
 
   const content = `
 <section class="hero" aria-labelledby="hero-title">
 <div class="hero-glow" aria-hidden="true"></div>
 <div class="wrap hero-grid player" data-play="${playData(latest)}">
 <div class="hero-copy">
-<p class="kicker">New episode · <time datetime="${esc(latest.dateIso)}">${esc(latest.dateShort)}</time>${latest.durationText ? ` · ${esc(latest.durationText)}` : ''}</p>
+<p class="hero-label">Latest episode</p>
 <h1 id="hero-title" class="hero-title${titleClass}"><a href="${epUrl(latest)}">${esc(latest.title)}</a></h1>
+<p class="hero-meta"><time datetime="${esc(latest.dateIso)}">${esc(latest.dateLong)}</time>${latest.durationText ? ` · ${esc(latest.durationText)}` : ''}</p>
 ${latest.excerpt ? `<p class="lede">${esc(latest.excerpt)}</p>` : ''}
 <div class="actions">
 ${latest.audio ? `<button type="button" class="btn btn-primary player-toggle" data-label-play="Play episode" data-label-pause="Pause" aria-label="Play episode: ${esc(latest.title)}">${playPause}<span class="label">Play episode</span></button>` : ''}
@@ -169,6 +212,7 @@ ${listenLinks(config, true)}
 <a class="text-link" href="#listen">More apps</a>
 </div>
 <p class="hero-more"><a href="${epUrl(latest)}">Show notes &amp; discussion →</a></p>
+<p class="prev-link"><a href="/episodes/">Previous episodes →</a></p>
 </div>
 <div class="hero-art">
 <img class="art" src="${ctx.assets['logo.jpg']}" alt="Kop On! podcast logo" width="340" height="340" fetchpriority="high">
@@ -177,19 +221,12 @@ ${latest.audio ? `${wave(latest, 48, `Seek within ${latest.title}`)}<div class="
 </div>
 </section>
 
-<div class="wrap home-cols">
-<section class="home-eps" aria-labelledby="recent-h">
-<div class="section-head"><h2 id="recent-h">Recent episodes</h2><a href="/episodes/">All ${episodes.length} →</a></div>
-<ul class="ep-list">${recent.map((ep) => epRow(ep)).join('')}</ul>
-</section>
-
-<aside class="home-wire" aria-labelledby="wire-h" data-news="wire">
+<section class="wrap home-news" aria-labelledby="wire-h" data-news="grid">
 <div class="section-head"><h2 id="wire-h">Latest LFC news</h2><a href="/news/">All news →</a></div>
 <p class="wire-note">Latest LFC headlines from around the web, updated automatically.</p>
-<div data-news-body>${renderWireList(wireItems, { now: ctx.builtAt.getTime(), relative: false })}</div>
+<div data-news-body>${renderNewsGrid(homeNews, { now: ctx.builtAt.getTime(), relative: false })}</div>
 <script type="application/json" id="news-data">${jsonForScript(news)}</script>
-</aside>
-</div>
+</section>
 
 <section class="wrap community-band" aria-labelledby="community-h">
 <div class="community-card">
@@ -273,6 +310,7 @@ ${player}
 </section>
 <div class="wrap ep-body">
 <article class="notes-col" aria-labelledby="notes-h">
+${shortsBlock(ep)}
 <h2 class="h2" id="notes-h">Show notes</h2>
 <div class="notes">${ep.notesHtml || '<p>No show notes for this one.</p>'}</div>
 <section class="discussion" id="comments" aria-labelledby="disc-h">

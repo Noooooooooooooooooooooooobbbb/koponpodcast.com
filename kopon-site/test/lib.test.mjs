@@ -406,3 +406,61 @@ test('review: episodes without audio get no dead timestamp buttons', () => {
   const xml = '<rss><channel><item><title>No audio</title><guid>n</guid><description>&lt;p&gt;00:00 a&lt;/p&gt;&lt;p&gt;05:00 b&lt;/p&gt;</description></item></channel></rss>';
   assert.doesNotMatch(parsePodcastFeed(xml).episodes[0].notesHtml, /<button/);
 });
+
+// ---------------------------------------------------------------- YouTube Shorts
+test('shorts: feed URL, video IDs from any link, feed parsing', async () => {
+  const { shortsFeedUrl, videoId, parseShortsFeed } = await import('../lib/shorts.mjs');
+  assert.equal(shortsFeedUrl('UC0dlhg-sM8HAbWvCcOiB0AQ'), 'https://www.youtube.com/feeds/videos.xml?playlist_id=UUSH0dlhg-sM8HAbWvCcOiB0AQ');
+  assert.equal(shortsFeedUrl('nonsense'), '');
+  for (const link of ['https://youtube.com/shorts/RioClip0001?feature=share', 'https://www.youtube.com/watch?v=RioClip0001&t=4', 'https://youtu.be/RioClip0001', 'RioClip0001', 'https://www.youtube-nocookie.com/embed/RioClip0001']) {
+    assert.equal(videoId(link), 'RioClip0001', link);
+  }
+  assert.equal(videoId('https://example.com/RioClip0001'), '');
+  assert.equal(videoId('"><script>'), '');
+  const list = parseShortsFeed(fx('youtube-shorts.xml'));
+  assert.deepEqual(list.map((s) => s.id), ['RioClip0001', 'RioTeaser01', 'LaskClip001']);
+  assert.equal(list[0].title, "Rio Ngumoha is DIFFERENT & here's why");
+  assert.deepEqual(parseShortsFeed('<html>blocked</html>'), []);
+});
+
+test('shorts: matched to the right episode, extras, hidden, caps, memory', async () => {
+  const { parseShortsFeed, assignShorts, mergeShorts } = await import('../lib/shorts.mjs');
+  const { episodes } = parsePodcastFeed(fx('podcast.xml').replaceAll('{{AUDIO}}', 'https://a.example/x.mp3'));
+  const shorts = parseShortsFeed(fx('youtube-shorts.xml'));
+  let map = assignShorts(episodes, shorts);
+  assert.deepEqual(map.get('rio-the-hero').map((s) => s.id), ['RioTeaser01', 'RioClip0001'], 'teaser posted an hour before release goes with the new episode');
+  assert.deepEqual(map.get('feeling-better').map((s) => s.id), ['LaskClip001']);
+  assert.equal(map.get('kavanagh-ruins-it').length, 0);
+  map = assignShorts(episodes, shorts, { extra: { 'Kavanagh Ruins It!': ['https://youtube.com/shorts/LaskClip001'], 'no-such-episode': ['RioClip0001'] }, hide: ['https://youtu.be/RioTeaser01'] });
+  assert.deepEqual(map.get('kavanagh-ruins-it').map((s) => s.id), ['LaskClip001'], 'manual placement wins');
+  assert.deepEqual(map.get('feeling-better').map((s) => s.id), []);
+  assert.deepEqual(map.get('rio-the-hero').map((s) => s.id), ['RioClip0001'], 'hidden Short removed');
+  map = assignShorts(episodes, shorts, { perEpisode: 1 });
+  assert.equal(map.get('rio-the-hero').length, 1);
+  const merged = mergeShorts([{ id: 'OldClip0001', title: 'old', published: '2026-09-01T00:00:00Z' }, { id: 'bad', published: 'x' }], shorts);
+  assert.deepEqual(merged.map((s) => s.id), ['RioClip0001', 'RioTeaser01', 'LaskClip001', 'OldClip0001'], 'Shorts that dropped off the feed are remembered');
+});
+
+test('shorts: the checker rebuilds for new Shorts (throttled)', () => {
+  const now = new Date('2026-10-24T12:05:00Z'), off = new Date('2026-10-24T13:05:00Z');
+  const feed = { count: 50, signature: 's', latestGuid: 'g', shortsIds: ['B', 'A'] };
+  const live = { signature: 's', latestGuid: 'g', builtAt: '2026-10-24T11:00:00Z', shortsFeedIds: ['A'] };
+  assert.match(decideRebuild(live, feed, { now }).reason, /New YouTube Shorts/);
+  assert.equal(decideRebuild(live, feed, { now: off }).rebuild, false);
+  assert.equal(decideRebuild({ ...live, shortsFeedIds: ['B', 'A'] }, feed, { now }).rebuild, false);
+  assert.equal(decideRebuild({ ...live, shortsFeedIds: null }, feed, { now }).rebuild, false, 'unknown on the live site: wait for the daily refresh');
+  assert.equal(decideRebuild(live, { ...feed, shortsIds: undefined }, { now }).rebuild, false, 'YouTube unreachable: no rebuild');
+});
+
+test('links to other sites open in a new tab; own links do not', async () => {
+  const { externalLinksInNewTab } = await import('../src/templates.mjs');
+  const html = '<a href="/episodes/">a</a><a href="https://koponpodcast.com/news/">b</a><a href="https://www.koponpodcast.com/x">c</a><a class="btn" href="https://open.spotify.com/x" rel="me">d</a><a href="https://x.com" target="_self">e</a><a href="#listen">f</a><a href="https://y.com" rel="nofollow noopener ugc" target="_blank">g</a>';
+  const out = externalLinksInNewTab(html, 'https://koponpodcast.com');
+  assert.match(out, /<a href="\/episodes\/">a<\/a>/);
+  assert.match(out, /<a href="https:\/\/koponpodcast\.com\/news\/">b<\/a>/);
+  assert.match(out, /<a href="https:\/\/www\.koponpodcast\.com\/x">c<\/a>/);
+  assert.match(out, /<a class="btn" href="https:\/\/open\.spotify\.com\/x" rel="noopener me" target="_blank">d<\/a>/);
+  assert.match(out, /<a href="https:\/\/x\.com" target="_self" rel="noopener">e<\/a>/, 'an explicit target is respected');
+  assert.match(out, /<a href="#listen">f<\/a>/);
+  assert.equal((out.match(/target="_blank"/g) || []).length, 2);
+});

@@ -8,6 +8,7 @@ podcast's RSS feed and runs on Netlify.
 - **All episodes** (`/episodes/`): instant search
 - **Latest LFC news** (`/news/`): headlines from This Is Anfield, the Liverpool Echo, Empire of the Kop, The Anfield Wrap and Anfield Online, refreshed automatically
 - **Community** (`/community/`): forum rooms plus the episode threads
+- **YouTube Shorts**: clips from your channel appear automatically on the episode they were posted after
 - **Automatic updates**: publish an episode on Spotify for Creators and the site rebuilds itself within about 15 minutes
 
 All the old episode addresses (for example `/episodes/rio-the-hero/`) still work.
@@ -46,25 +47,34 @@ If builds ever keep failing, it backs off to **at most 8 builds a day** (plus up
 
 To check it's working, open **Logs → Functions → check-new-episode** in Netlify to see what it decided, or click **Run now**.
 
-### 4. Switch on comments and the forum
+### 4. Switch on comments and the forum (free, with Disqus)
 
 Until you do this, discussion areas show a friendly "opens soon" panel.
 
-**Hyvor Talk (easiest, nothing to host)**
+1. Go to <https://disqus.com>, click **Get started**, then **I want to install Disqus on my site**.
+2. Set **Website Name** to `koponpodcast` (or similar). This becomes your *shortname*. Pick any category, then choose the free **Basic** plan.
+3. On the platform list, skip to the bottom and choose **I don't see my platform listed** (or **Universal Code**). You don't need to paste any code, because the site already has it. Finish the setup.
+4. In Disqus, go to **Settings → General**. Check the **Shortname** and set **Website URL** to `https://koponpodcast.com`. Under **Settings → Advanced**, add `koponpodcast.com` to **Trusted Domains**.
+5. In Netlify, add an environment variable: `DISQUS_SHORTNAME` = your shortname. Then go to **Deploys → Trigger deploy**.
 
-1. Sign up at <https://talk.hyvor.com> and add your website (`kop-on-podcast.netlify.app`).
-2. In the Hyvor Talk Console, open **Settings → Website** and copy your **Website ID** (a number).
-3. In Netlify, add an environment variable: `HYVOR_WEBSITE_ID` = that number. Then trigger a deploy.
+Visitors can sign in with Google, Facebook, X or a Disqus account, or post as guests if you allow it in Disqus's settings. You moderate from disqus.com or the Disqus app. The free plan shows Disqus adverts and uses tracking cookies, so the site asks visitors to press **Show the discussion** first and remembers their choice.
 
-Cost: Hyvor Talk is a paid service. It has a 14-day free trial, then the Personal plan is about €5 a month for 2,500 comment-box loads. The site loads the comments box only when someone scrolls down to it, so casual visitors don't use up loads. Check current prices at <https://hyvor.com/talk/pricing>.
-
-**Remark42 (free, but you host it)**
-
-Remark42 runs on your own small server (for example a cheap VPS with Docker). See <https://remark42.com/docs/getting-started/installation/>. Once it's running, add `REMARK42_HOST` (for example `https://comments.yourdomain.com`) and `REMARK42_SITE_ID` (the `SITE` value you gave the server) as Netlify environment variables, then trigger a deploy.
+**Alternatives:** Cusdis (free, no ads, no logins, up to 100 approved comments a month: set `CUSDIS_APP_ID`) or Hyvor Talk (paid, no ads: set `HYVOR_WEBSITE_ID`).
 
 Every episode gets its own thread automatically. The forum rooms (The Terrace, Transfer Talk, Matchday) are set in `site.config.mjs`.
 
 ---
+
+## YouTube Shorts
+
+Post a Short on the Kop On YouTube channel and it appears on the episode page within about 3 hours. It goes on the newest episode released before the Short, and teasers posted up to 12 hours before an episode count towards that episode. Nothing loads from YouTube until a visitor presses play.
+
+To put a Short on a different episode, or hide one, edit `youtube` in `site.config.mjs`:
+
+```js
+extraShorts: { 'Rio the Hero!': ['https://youtube.com/shorts/abcdefghijk'] },
+hideShorts: ['https://youtube.com/shorts/zyxwvutsrqp'],
+```
 
 ## Changing things
 
@@ -76,6 +86,8 @@ Almost everything you'd want to change is in **`site.config.mjs`**:
 | Podcast app links (Spotify, Apple…) | `listen`; `featured: true` shows it as a button |
 | Patreon link | `patreon` |
 | Forum rooms | `rooms` |
+| YouTube channel, Shorts per episode | `youtube` |
+| The site's main address | `siteUrl` |
 | News sites | `news.sources` (each can have backup URLs) |
 | How often the site refreshes without new episodes | `refreshHours` |
 
@@ -85,7 +97,7 @@ The logo files are in `src/assets/img/`, colours and fonts are in `src/assets/si
 
 ## Checking the news feeds
 
-Open `https://kop-on-podcast.netlify.app/api/news`. Under `sources`, each site shows `"ok": true` and a headline count, or the error it hit. If a site changes its feed address, update its URL in `site.config.mjs`. The page carries on with the other sites in the meantime.
+Open `https://koponpodcast.com/api/news`. Under `sources`, each site shows `"ok": true` and a headline count, or the error it hit. If a site changes its feed address, update its URL in `site.config.mjs`. The page carries on with the other sites in the meantime.
 
 ## How it works
 

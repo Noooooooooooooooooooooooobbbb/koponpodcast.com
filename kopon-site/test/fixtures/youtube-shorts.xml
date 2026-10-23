@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <title>Uploads from Kop On</title>
+ <entry>
+  <id>yt:video:RioClip0001</id><yt:videoId>RioClip0001</yt:videoId>
+  <title>Rio Ngumoha is DIFFERENT &amp; here's why</title>
+  <link rel="alternate" href="https://www.youtube.com/shorts/RioClip0001"/>
+  <published>2026-10-22T15:00:00+00:00</published><updated>2026-10-22T15:30:00+00:00</updated>
+ </entry>
+ <entry>
+  <id>yt:video:RioTeaser01</id><yt:videoId>RioTeaser01</yt:videoId>
+  <title>Comeback kings? New episode tonight</title>
+  <link rel="alternate" href="https://www.youtube.com/shorts/RioTeaser01"/>
+  <published>2026-10-22T08:00:00+00:00</published>
+ </entry>
+ <entry>
+  <id>yt:video:LaskClip001</id><yt:videoId>LaskClip001</yt:videoId>
+  <title>Barcola's hat-trick in Linz</title>
+  <link rel="alternate" href="https://www.youtube.com/shorts/LaskClip001"/>
+  <published>2026-10-16T10:00:00+00:00</published>
+ </entry>
+ <entry>
+  <id>yt:video:BadDateClip</id><yt:videoId>BadDateClip</yt:videoId>
+  <title>No date</title>
+  <published>not a date</published>
+ </entry>
+</feed>

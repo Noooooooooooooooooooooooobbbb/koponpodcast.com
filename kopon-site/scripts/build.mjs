@@ -11,6 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import siteConfig from '../site.config.mjs';
 import { parsePodcastFeed } from '../lib/feed.mjs';
 import { fetchAllNews } from '../lib/news.mjs';
+import { shortsFeedUrl, parseShortsFeed, mergeShorts, assignShorts } from '../lib/shorts.mjs';
 import { esc, slugify } from '../lib/text.mjs';
 import * as T from '../src/templates.mjs';
 
@@ -34,6 +35,8 @@ async function fetchFeed(url, fetchImpl, attempts = 3) {
 
 function resolveComments(config, env) {
   const c = { ...config.comments };
+  if (env.DISQUS_SHORTNAME) { c.provider = 'disqus'; c.disqusShortname = env.DISQUS_SHORTNAME.trim(); }
+  if (env.CUSDIS_APP_ID) { c.provider = 'cusdis'; c.cusdisAppId = env.CUSDIS_APP_ID.trim(); }
   if (env.HYVOR_WEBSITE_ID) { c.provider = 'hyvor'; c.hyvorWebsiteId = env.HYVOR_WEBSITE_ID.trim(); }
   if (env.REMARK42_HOST) { c.provider = 'remark42'; c.remark42Host = env.REMARK42_HOST.trim(); }
   if (env.REMARK42_SITE_ID) c.remark42SiteId = env.REMARK42_SITE_ID.trim();
@@ -60,7 +63,7 @@ async function buildAssets(outDir, config) {
     assets[name] = `/assets/${name}?v=${hash(buf)}`;
   }
   // news-render.js first, because news.js imports it
-  for (const name of ['site.css', 'player.js', 'search.js', 'news-render.js', 'news.js']) {
+  for (const name of ['site.css', 'player.js', 'search.js', 'comments.js', 'news-render.js', 'news.js']) {
     let text = await readFile(join(srcDir, name), 'utf8');
     if (name === 'news.js') text = text.replace("from './news-render.js'", `from '${assets['news-render.js']}'`);
     await writeFile(join(outDir, 'assets', name), text);
@@ -89,21 +92,46 @@ function normaliseConfig(c) {
   };
 }
 
-// Episode addresses already published on the live site, so a retitled
-// episode keeps its URL (and its comments). Missing on the first deploy.
-async function liveSlugs(siteUrl, fetchImpl, log) {
+// What the live site published last time (episode addresses, Shorts seen).
+// Missing on the very first deploy, which is fine.
+async function liveStatus(siteUrl, fetchImpl) {
   try {
     const res = await fetchImpl(`${siteUrl}/site-status.json?t=${Date.now()}`, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) return {};
+    if (!res.ok) return null;
     const data = await res.json();
-    const slugs = data && typeof data.slugs === 'object' && data.slugs ? data.slugs : {};
-    const clean = {};
-    for (const [guid, slug] of Object.entries(slugs)) if (/^[a-z0-9-]{1,200}$/.test(slug)) clean[guid] = slug;
-    log(`  kept ${Object.keys(clean).length} published episode URLs from the live site`);
-    return clean;
+    return data && typeof data === 'object' ? data : null;
   } catch {
-    return {};
+    return null;
   }
+}
+
+// Episode addresses already published, so a retitled episode keeps its URL (and its comments)
+function publishedSlugs(live) {
+  const slugs = live && typeof live.slugs === 'object' && live.slugs ? live.slugs : {};
+  const clean = {};
+  for (const [guid, slug] of Object.entries(slugs)) if (/^[a-z0-9-]{1,200}$/.test(slug)) clean[guid] = slug;
+  return clean;
+}
+
+async function loadShorts(config, live, fetchImpl, env, log) {
+  const previous = Array.isArray(live?.shorts) ? live.shorts : [];
+  const url = shortsFeedUrl(config.youtube?.channelId);
+  let fresh = null;
+  if (url && !env.KOPON_SKIP_SHORTS) {
+    try {
+      const res = await fetchImpl(url, { headers: { 'User-Agent': 'KopOnSiteBuilder/2.0' }, signal: AbortSignal.timeout(10000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      fresh = parseShortsFeed(await res.text());
+      log(`  YouTube Shorts: ${fresh.length} in the feed, ${previous.length} remembered`);
+    } catch (err) {
+      log(`  YouTube Shorts feed unavailable (${err.message}); using the ${previous.length} remembered`);
+    }
+  }
+  return {
+    all: mergeShorts(previous, fresh || []),
+    // what the scheduled checker compares against to spot new Shorts
+    feedIds: fresh ? fresh.map((s) => s.id) : (Array.isArray(live?.shortsFeedIds) ? live.shortsFeedIds : null),
+  };
 }
 
 export async function build(options = {}) {
@@ -119,7 +147,9 @@ export async function build(options = {}) {
   const xml = env.KOPON_FEED_FILE
     ? await readFile(env.KOPON_FEED_FILE, 'utf8')
     : await fetchFeed(config.feedUrl, fetchImpl);
-  const published = await liveSlugs(config.siteUrl, fetchImpl, log);
+  const live = env.KOPON_NO_LIVE ? null : await liveStatus(config.siteUrl, fetchImpl);
+  const published = publishedSlugs(live);
+  if (Object.keys(published).length) log(`  kept ${Object.keys(published).length} published episode URLs from the live site`);
   const { show, episodes, signature } = parsePodcastFeed(xml, {
     excerptStopMarkers: config.excerptStopMarkers,
     slugOverrides: { ...published, ...config.slugOverrides },
@@ -139,13 +169,22 @@ export async function build(options = {}) {
   }
 
   const comments = resolveComments(config, env);
-  const commentsOn = (comments.provider === 'hyvor' && comments.hyvorWebsiteId) || (comments.provider === 'remark42' && comments.remark42Host);
+  const commentsOn = (comments.provider === 'hyvor' && comments.hyvorWebsiteId) || (comments.provider === 'remark42' && comments.remark42Host)
+    || (comments.provider === 'disqus' && /^[a-z0-9-]+$/i.test(comments.disqusShortname || '')) || (comments.provider === 'cusdis' && comments.cusdisAppId);
   log(commentsOn ? `  comments: ${comments.provider}` : '  comments: not configured yet (showing "opens soon" panels)');
 
   // 3. Write everything
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
   const assets = await buildAssets(outDir, config);
+  const shorts = await loadShorts(config, live, fetchImpl, env, log);
+  const shortsBySlug = assignShorts(episodes, shorts.all, {
+    perEpisode: config.youtube?.shortsPerEpisode ?? 6,
+    extra: config.youtube?.extraShorts,
+    hide: config.youtube?.hideShorts || [],
+  });
+  for (const ep of episodes) ep.shorts = shortsBySlug.get(ep.slug) || [];
+
   const ctx = { config, show, episodes, news, assets, comments, builtAt };
 
   await writeOut(outDir, 'index.html', T.homePage(ctx));
@@ -168,7 +207,7 @@ export async function build(options = {}) {
   await writeOut(outDir, 'sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(([u, d]) => `  <url><loc>${esc(config.siteUrl + u)}</loc><lastmod>${d}</lastmod></url>`).join('\n')}\n</urlset>\n`);
   await writeOut(outDir, 'robots.txt', `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${config.siteUrl}/sitemap.xml\n`);
   // Read by the scheduled checker to decide whether a rebuild is needed
-  await writeOut(outDir, 'site-status.json', JSON.stringify({ builtAt: builtAt.toISOString(), signature, count: episodes.length, latestGuid: episodes[0].guid, latestTitle: episodes[0].title, slugs: Object.fromEntries(episodes.map((e) => [e.guid, e.slug])) }, null, 2));
+  await writeOut(outDir, 'site-status.json', JSON.stringify({ builtAt: builtAt.toISOString(), signature, count: episodes.length, latestGuid: episodes[0].guid, latestTitle: episodes[0].title, slugs: Object.fromEntries(episodes.map((e) => [e.guid, e.slug])), shortsFeedIds: shorts.feedIds, shorts: shorts.all }, null, 2));
 
   log(`  wrote ${episodes.length + 6 + config.rooms.length} pages to ${outDir}`);
   return { episodes, news, outDir, assets };

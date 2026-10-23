@@ -22,6 +22,9 @@ export function decideRebuild(live, feed, { now = new Date(), maxAgeHours = 24 }
     }
     return gated('Episode details changed in the feed');
   }
+  if (Array.isArray(feed.shortsIds) && Array.isArray(live.shortsFeedIds) && feed.shortsIds.join() !== live.shortsFeedIds.join()) {
+    return gated('New YouTube Shorts');
+  }
   const builtAt = Date.parse(live.builtAt || '');
   // Slots are 3 h apart, so allow 3 h early to keep the refresh roughly every maxAgeHours
   if (maxAgeHours && (!Number.isFinite(builtAt) || now.getTime() - builtAt > Math.max(1, maxAgeHours - 3) * 3600000)) {
@@ -31,7 +34,7 @@ export function decideRebuild(live, feed, { now = new Date(), maxAgeHours = 24 }
 }
 
 // The whole scheduled check, with every outside dependency injectable for tests.
-export async function runScheduledCheck({ feedUrl, siteUrl, hookUrl, fetchImpl = globalThis.fetch, parseFeed, now = new Date(), maxAgeHours = 24, log = console.log }) {
+export async function runScheduledCheck({ feedUrl, siteUrl, hookUrl, fetchImpl = globalThis.fetch, parseFeed, shortsUrl = '', parseShorts = null, now = new Date(), maxAgeHours = 24, log = console.log }) {
   if (!hookUrl) {
     log('BUILD_HOOK_URL is not set, so automatic rebuilds are off. See README: "Turn on automatic rebuilds".');
     return { rebuild: false, reason: 'No build hook configured' };
@@ -49,6 +52,11 @@ export async function runScheduledCheck({ feedUrl, siteUrl, hookUrl, fetchImpl =
   } catch (err) {
     log(`Could not read the podcast feed (${err.message}); will try again next time.`);
     return { rebuild: false, reason: 'Feed unavailable' };
+  }
+
+  // New YouTube Shorts (optional; ignored if YouTube can't be reached)
+  if (shortsUrl && parseShorts) {
+    try { feed.shortsIds = parseShorts(await get(shortsUrl, 'text')).map((s) => s.id); } catch (err) { log(`YouTube Shorts feed unavailable (${err.message})`); }
   }
 
   let live = null;

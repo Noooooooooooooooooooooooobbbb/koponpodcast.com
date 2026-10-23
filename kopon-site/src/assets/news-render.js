@@ -69,6 +69,21 @@ export function initials(name) {
   return String(name || '').split(/\s+/).filter((w) => /^[A-Za-z]/.test(w) && !/^(the|of)$/i.test(w)).map((w) => w[0].toUpperCase()).join('').slice(0, 3);
 }
 
+function newsCard(it, opts, cls = '') {
+  const img = safeUrl(it.image);
+  return `<article class="news-card${cls}"><a ${linkAttrs(it.url)}>${
+    img
+      ? `<span class="news-media"><img src="${esc(img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></span>`
+      : `<span class="news-media is-blank" aria-hidden="true"><span>${esc(initials(it.source))}</span></span>`
+  }<span class="news-body"><span class="news-meta"><span class="news-src">${esc(it.source)}</span> · <time datetime="${esc(it.date || '')}">${esc(timeLabel(it.date, opts.now, opts.relative))}</time></span><span class="news-title">${esc(it.title)}</span></span></a></article>`;
+}
+
+// Home page: a full-width grid of picture cards
+export function renderNewsGrid(items, opts = {}) {
+  if (!items.length) return `<p class="news-empty">Headlines are taking a breather. Check back soon.</p>`;
+  return `<div class="news-grid">${items.map((it) => newsCard(it, opts)).join('')}</div>`;
+}
+
 // Full News page body: filter chips, featured cards, then the rest as a list
 export function renderNewsPage(data, opts = {}) {
   const active = opts.active || '';

@@ -26,6 +26,7 @@ const newsMap = {};
 for (const s of config.news.sources) newsMap[typeof s.urls[0] === 'string' ? s.urls[0] : s.urls[0].url] = join(here, 'fixtures/news', `${s.id}.xml`);
 const liveStatus = opt('--live-status', null);
 const fixtureFetch = async (url) => {
+  if (url.includes('youtube.com/feeds/')) return args.includes('--no-shorts') ? new Response('blocked', { status: 403 }) : new Response(await readFile(join(here, 'fixtures/youtube-shorts.xml'), 'utf8'));
   if (url.includes('/site-status.json')) return liveStatus ? new Response(await readFile(liveStatus, 'utf8')) : new Response('nope', { status: 404 });
   const f = newsMap[url];
   if (!f) return new Response('nope', { status: 404 });
@@ -35,6 +36,8 @@ const fixtureFetch = async (url) => {
 const env = { KOPON_FEED_FILE: feedFile };
 if (args.includes('--no-news')) env.KOPON_SKIP_NEWS = '1';
 if (comments === 'hyvor') env.HYVOR_WEBSITE_ID = '12345';
+if (comments === 'disqus') env.DISQUS_SHORTNAME = 'kopontest';
+if (comments === 'cusdis') env.CUSDIS_APP_ID = 'abc-123';
 if (comments === 'remark42') { env.REMARK42_HOST = 'https://comments.example.com/'; env.REMARK42_SITE_ID = 'kopon'; }
 
 await build({ env, fetch: fixtureFetch, outDir: out, now: '2026-10-23T12:00:00Z' });

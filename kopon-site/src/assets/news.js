@@ -1,6 +1,6 @@
 // Live LFC news: shows the headlines baked into the page straight away,
 // then quietly swaps in fresh ones from /api/news.
-import { renderWireList, renderNewsPage, pickDiverse, initials, esc } from './news-render.js';
+import { renderWireList, renderNewsGrid, renderNewsPage, pickDiverse, initials, esc } from './news-render.js';
 
 const root = document.querySelector('[data-news]');
 if (root) {
@@ -40,7 +40,9 @@ if (root) {
   const draw = () => {
     if (!data) return;
     const now = Date.now();
-    if (mode === 'wire') {
+    if (mode === 'grid') {
+      target.innerHTML = renderNewsGrid(pickDiverse(data.items || [], 6, 2), { now, relative: true });
+    } else if (mode === 'wire') {
       target.innerHTML = renderWireList(pickDiverse(data.items || [], 5, 2), { now, relative: true });
     } else {
       target.innerHTML = renderNewsPage(data, { now, relative: true, active });

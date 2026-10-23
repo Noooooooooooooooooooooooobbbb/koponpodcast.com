@@ -281,6 +281,28 @@
     }
   });
 
+  // YouTube Shorts: swap the thumbnail for the real player on click
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('.short-play[data-yt]') : null;
+    if (!btn) return;
+    var id = btn.getAttribute('data-yt');
+    if (!/^[\w-]{11}$/.test(id)) return;
+    if (!audio.paused) audio.pause(); // don't play two things at once
+    var frame = document.createElement('iframe');
+    frame.src = 'https://www.youtube-nocookie.com/embed/' + id + '?autoplay=1&playsinline=1&rel=0';
+    frame.title = btn.getAttribute('aria-label') || 'YouTube Short';
+    frame.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    frame.setAttribute('allowfullscreen', '');
+    frame.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+    btn.replaceWith(frame);
+  });
+
+  // A Short whose thumbnail fails to load shows a plain tile instead of a broken image
+  document.querySelectorAll('.short-play img').forEach(function (img) {
+    var hide = function () { img.style.visibility = 'hidden'; };
+    if (img.complete && !img.naturalWidth) hide(); else img.addEventListener('error', hide);
+  });
+
   // Range inputs (waveform and mini player) for seeking
   document.addEventListener('input', function (e) {
     var el = e.target;
