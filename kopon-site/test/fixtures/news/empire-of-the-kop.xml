@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	xmlns:media="http://search.yahoo.com/mrss/">
+<channel>
+	<title>Empire of the Kop</title>
+	<atom:link href="https://example.com/feed/" rel="self" type="application/rss+xml" />
+	<link>https://example.com</link>
+	<language>en-GB</language>
+	<item>
+		<title>Ian Rush imparts 5-word advice to &#8216;fantastic&#8217; Bradley Barcola after £106m Liverpool move</title>
+		<link>https://www.empireofthekop.com/2026/10/rush/</link>
+		<dc:creator><![CDATA[Staff]]></dc:creator>
+		<pubDate>Fri, 23 Oct 2026 10:00:00 GMT</pubDate>
+		<category><![CDATA[News]]></category>
+		<guid isPermaLink="false">https://www.empireofthekop.com/?p=14</guid>
+		<description><![CDATA[<p>Summary of Ian Rush imparts 5-word advice to &amp;#8216;fantastic&amp;#8217; Bradley Barcola after £106m Liverpool move&#8230;</p>]]></description>
+		<content:encoded><![CDATA[<p><img loading="lazy" src="https://www.empireofthekop.com/wp-content/uploads/rush.jpg" alt="" width="1200" height="800" /></p><p>Full article body.</p>]]></content:encoded>
+	</item>
+	<item>
+		<title>Munoz, Frimpong, Szoboszlai: Sky reporter shares multiple Liverpool injury updates live on air</title>
+		<link>https://www.empireofthekop.com/2026/10/injuries/</link>
+		<dc:creator><![CDATA[Staff]]></dc:creator>
+		<pubDate>Fri, 23 Oct 2026 08:00:00 GMT</pubDate>
+		<category><![CDATA[News]]></category>
+		<guid isPermaLink="false">https://www.empireofthekop.com/?p=28</guid>
+		<description><![CDATA[<p>Summary of Munoz, Frimpong, Szoboszlai: Sky reporter shares multiple Liverpool injury updates live on air&#8230;</p>]]></description>
+		<content:encoded><![CDATA[<p>Full article body.</p>]]></content:encoded>
+	</item>
+	<item>
+		<title>&#8216;To this day&#8230;&#8217; &#8211; Jurgen Klopp makes heartbreaking confession over Diogo Jota&#8217;s death</title>
+		<link>https://www.empireofthekop.com/2026/10/klopp/</link>
+		<dc:creator><![CDATA[Staff]]></dc:creator>
+		<pubDate>Fri, 23 Oct 2026 03:00:00 GMT</pubDate>
+		<category><![CDATA[News]]></category>
+		<guid isPermaLink="false">https://www.empireofthekop.com/?p=63</guid>
+		<description><![CDATA[<p>Summary of &amp;#8216;To this day&amp;#8230;&amp;#8217; &amp;#8211; Jurgen Klopp makes heartbreaking confession over Diogo Jota&amp;#8217;s death&#8230;</p>]]></description>
+		<content:encoded><![CDATA[<p>Full article body.</p>]]></content:encoded>
+	</item>
+</channel></rss>

@@ -1,0 +1,29 @@
+﻿<?xml version="1.0"?>
+<!DOCTYPE rss [ <!ENTITY foo "bar"> ]>
+<!-- comment with <item> inside -->
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<channel><title>Nasty &amp; Co</title>
+<item>
+  <title>&lt;script&gt;alert("t")&lt;/script&gt; Quotes "double" &amp; 'single' &#8216;curly&#8217;</title>
+  <guid>nasty-1</guid>
+  <pubDate>Fri, 23 Oct 2026 08:00:00 BST</pubDate>
+  <enclosure url="{{AUDIO}}?ep=nasty" type="audio/mpeg" length="1"/>
+  <itunes:duration>2400</itunes:duration>
+  <content:encoded><![CDATA[
+    <p onclick="alert(1)">Hello <b>bold</b> <i>it</i> <script>alert('x')</script>world</p>
+    <img src=x onerror="alert(2)">
+    <a href="javascript:alert(3)">bad link</a>
+    <a href=" JaVaScRiPt:alert(4)">bad link 2</a>
+    <a href="https://example.com/?a=1&amp;b=2" onmouseover="alert(5)">good link</a>
+    <iframe src="https://evil.example"></iframe><style>body{display:none}</style>
+    <svg><script>alert(6)</script></svg>
+    <p>Visit https://www.thisisanfield.com/latest. Now!</p>
+    <div>00:00 Intro<br>12:34 Chapter two<br>1:02:03 Too late for a 40 min episode</div>
+    <ul><li>one<li>two</ul>
+    <p>unclosed <strong>tag
+  ]]></content:encoded>
+</item>
+<item><title>No date, no audio</title><guid>nasty-2</guid><description>plain &amp;amp; text</description></item>
+<item><title>Dup Title</title><guid>dup-new</guid><pubDate>Thu, 22 Oct 2026 10:00:00 GMT</pubDate><enclosure url="{{AUDIO}}?d=2" type="audio/mpeg"/></item>
+<item><title>Dup Title</title><guid>dup-old</guid><pubDate>Wed, 21 Oct 2026 10:00:00 GMT</pubDate><enclosure url="{{AUDIO}}?d=1" type="audio/mpeg"/></item>
+</channel></rss>

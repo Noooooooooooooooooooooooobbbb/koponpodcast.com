@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+ <title>The Anfield Wrap</title>
+ <entry>
+  <id>yt:video:abc</id><yt:videoId>abc</yt:videoId>
+  <title>Liverpool 4 Villarreal 3 | Post Match Pint</title>
+  <link rel="alternate" href="https://www.youtube.com/watch?v=abc"/>
+  <published>2026-10-21T22:05:00+00:00</published><updated>2026-10-22T01:00:00+00:00</updated>
+  <media:group><media:title>Liverpool 4 Villarreal 3</media:title><media:thumbnail url="https://i2.ytimg.com/vi/abc/hqdefault.jpg" width="480" height="360"/></media:group>
+ </entry>
+</feed>

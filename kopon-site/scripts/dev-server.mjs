@@ -1,0 +1,92 @@
+// Local preview that behaves like Netlify: serves ./dist, runs /api/news
+// through the real function, supports HTTP range requests (for audio seeking)
+// and serves 404.html for unknown paths.
+//   npm run dev                -> http://localhost:8888 (live news)
+//   node scripts/dev-server.mjs --fixtures   (news from test/fixtures, offline)
+import { createServer } from 'node:http';
+import { stat, readFile, open } from 'node:fs/promises';
+import { join, extname, resolve, dirname, normalize } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const args = process.argv.slice(2);
+const flag = (name) => args.includes(name);
+const opt = (name, def) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : def; };
+const PORT = +opt('--port', process.env.PORT || 8888);
+const DIST = resolve(opt('--dir', join(ROOT, 'dist')));
+
+const TYPES = {
+  '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8', '.xml': 'application/xml; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json', '.mp3': 'audio/mpeg', '.wav': 'audio/wav',
+};
+
+let apiMode = opt('--api', 'ok'); // ok | fail | slow
+const failedOnce = new Set();
+if (flag('--fixtures')) {
+  const { default: config } = await import(pathToFileURL(join(ROOT, 'site.config.mjs')).href);
+  const map = {};
+  for (const s of config.news.sources) map[(typeof s.urls[0] === 'string' ? s.urls[0] : s.urls[0].url)] = join(ROOT, 'test/fixtures/news', `${s.id}.xml`);
+  globalThis.fetch = async (url) => {
+    const file = map[url];
+    if (!file) return new Response('not found', { status: 404 });
+    try { return new Response(await readFile(file, 'utf8'), { status: 200 }); } catch { return new Response('not found', { status: 404 }); }
+  };
+}
+const newsFn = (await import(pathToFileURL(join(ROOT, 'netlify/functions/news.mjs')).href)).default;
+
+async function sendFile(req, res, file, status = 200) {
+  const info = await stat(file);
+  const type = TYPES[extname(file).toLowerCase()] || 'application/octet-stream';
+  const range = req.headers.range && /^bytes=(\d*)-(\d*)$/.exec(req.headers.range);
+  if (range && status === 200) {
+    let start = range[1] === '' ? info.size - +range[2] : +range[1];
+    let end = range[1] === '' || range[2] === '' ? info.size - 1 : +range[2];
+    end = Math.min(end, info.size - 1);
+    if (start > end || start < 0) { res.writeHead(416, { 'Content-Range': `bytes */${info.size}` }); return res.end(); }
+    res.writeHead(206, { 'Content-Type': type, 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${info.size}`, 'Accept-Ranges': 'bytes' });
+    const fh = await open(file);
+    const stream = fh.createReadStream({ start, end });
+    stream.on('close', () => fh.close());
+    return stream.pipe(res);
+  }
+  res.writeHead(status, { 'Content-Type': type, 'Content-Length': info.size, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-cache' });
+  if (req.method === 'HEAD') return res.end();
+  res.end(await readFile(file));
+}
+
+const server = createServer(async (req, res) => {
+  try {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    if (url.pathname === '/api/news') {
+      if (apiMode === 'fail') { res.writeHead(500); return res.end('boom'); }
+      if (apiMode === 'slow') await new Promise((r) => setTimeout(r, 3000));
+      const r = await newsFn(new Request(url));
+      res.writeHead(r.status, Object.fromEntries(r.headers));
+      return res.end(await r.text());
+    }
+    if (url.pathname === '/__api-mode') { apiMode = url.searchParams.get('m') || 'ok'; res.writeHead(200); return res.end(apiMode); }
+    if (url.pathname.startsWith('/test-media/')) {
+      if (url.searchParams.has('failonce') && !failedOnce.has(url.search)) { failedOnce.add(url.search); res.writeHead(503); return res.end('try again'); }
+      return await sendFile(req, res, join(ROOT, 'test/fixtures/media', normalize(url.pathname.slice(12)).replace(/^(\.\.[/\\])+/, '')));
+    }
+    let p = decodeURIComponent(url.pathname);
+    const file = join(DIST, normalize(p).replace(/^(\.\.[/\\])+/, ''));
+    if (!file.startsWith(DIST)) { res.writeHead(403); return res.end(); }
+    let s = await stat(file).catch(() => null);
+    if (s?.isDirectory()) {
+      if (!p.endsWith('/')) { res.writeHead(301, { Location: p + '/' + url.search }); return res.end(); }
+      const idx = join(file, 'index.html');
+      if (await stat(idx).catch(() => null)) return await sendFile(req, res, idx);
+      s = null;
+    }
+    if (s?.isFile()) return await sendFile(req, res, file);
+    return await sendFile(req, res, join(DIST, '404.html'), 404);
+  } catch (err) {
+    res.writeHead(500, { 'Content-Type': 'text/plain' });
+    res.end(String(err?.stack || err));
+  }
+});
+
+server.listen(PORT, '127.0.0.1', () => console.log(`Kop On! preview: http://localhost:${PORT}  (api: ${apiMode}${flag('--fixtures') ? ', fixture news' : ''})`));

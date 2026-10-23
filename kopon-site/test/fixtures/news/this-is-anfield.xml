@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"
+	xmlns:content="http://purl.org/rss/1.0/modules/content/"
+	xmlns:wfw="http://wellformedweb.org/CommentAPI/"
+	xmlns:dc="http://purl.org/dc/elements/1.1/"
+	xmlns:atom="http://www.w3.org/2005/Atom"
+	xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+	xmlns:slash="http://purl.org/rss/1.0/modules/slash/"
+	xmlns:media="http://search.yahoo.com/mrss/">
+<channel>
+	<title>This Is Anfield</title>
+	<atom:link href="https://example.com/feed/" rel="self" type="application/rss+xml" />
+	<link>https://example.com</link>
+	<language>en-GB</language>
+	<item>
+		<title>Bradley Barcola declared fit vs. Brighton as Victor Munoz doubt explained</title>
+		<link>https://www.thisisanfield.com/2026/10/barcola-fit/</link>
+		<dc:creator><![CDATA[Staff]]></dc:creator>
+		<pubDate>Fri, 23 Oct 2026 11:00:00 GMT</pubDate>
+		<category><![CDATA[News]]></category>
+		<guid isPermaLink="false">https://www.thisisanfield.com/?p=7</guid>
+		<description><![CDATA[<p>Summary of Bradley Barcola declared fit vs. Brighton as Victor Munoz doubt explained&#8230;</p>]]></description>
+		<content:encoded><![CDATA[<p><img loading="lazy" src="https://www.thisisanfield.com/wp-content/uploads/barcola.jpg" alt="" width="1200" height="800" /></p><p>Full article body.</p>]]></content:encoded>
+	</item>
+	<item>
+		<title>Liverpool &#8216;make contact&#8217; for Felix Nmecha in new midfielder search</title>
+		<link>https://www.thisisanfield.com/2026/10/nmecha/</link>
+		<dc:creator><![CDATA[Staff]]></dc:creator>
+		<pubDate>Fri, 23 Oct 2026 09:00:00 GMT</pubDate>
+		<category><![CDATA[News]]></category>
+		<guid isPermaLink="false">https://www.thisisanfield.com/?p=21</guid>
+		<description><![CDATA[<p>Summary of Liverpool &amp;#8216;make contact&amp;#8217; for Felix Nmecha in new midfielder search&#8230;</p>]]></description>
+		<content:encoded><![CDATA[<p><img loading="lazy" src="https://www.thisisanfield.com/wp-content/uploads/nmecha.jpg" alt="" width="1200" height="800" /></p><p>Full article body.</p>]]></content:encoded>
+	</item>
+	<item>
+		<title>Liverpool vs. Brighton could be in doubt due to storm</title>
+		<link>https://www.thisisanfield.com/2026/10/storm/</link>
+		<dc:creator><![CDATA[Staff]]></dc:creator>
+		<pubDate>Fri, 23 Oct 2026 07:00:00 GMT</pubDate>
+		<category><![CDATA[News]]></category>
+		<guid isPermaLink="false">https://www.thisisanfield.com/?p=35</guid>
+		<description><![CDATA[<p>Summary of Liverpool vs. Brighton could be in doubt due to storm&#8230;</p>]]></description>
+		<content:encoded><![CDATA[<p>Full article body.</p>]]></content:encoded>
+	</item>
+	<item>
+		<title>Harvey Elliott challenged to &#8216;step up&#8217; after Liverpool and Valencia talks</title>
+		<link>https://www.thisisanfield.com/2026/10/elliott/</link>
+		<dc:creator><![CDATA[Staff]]></dc:creator>
+		<pubDate>Fri, 23 Oct 2026 05:00:00 GMT</pubDate>
+		<category><![CDATA[News]]></category>
+		<guid isPermaLink="false">https://www.thisisanfield.com/?p=49</guid>
+		<description><![CDATA[<p>Summary of Harvey Elliott challenged to &amp;#8216;step up&amp;#8217; after Liverpool and Valencia talks&#8230;</p>]]></description>
+		<content:encoded><![CDATA[<p><img loading="lazy" src="https://www.thisisanfield.com/wp-content/uploads/elliott.jpg" alt="" width="1200" height="800" /></p><p>Full article body.</p>]]></content:encoded>
+	</item>
+	<item>
+		<title>Dominik Szoboszlai return timeline revealed after hamstring injury</title>
+		<link>https://www.thisisanfield.com/2026/10/szoboszlai/</link>
+		<dc:creator><![CDATA[Staff]]></dc:creator>
+		<pubDate>Fri, 23 Oct 2026 01:00:00 GMT</pubDate>
+		<category><![CDATA[News]]></category>
+		<guid isPermaLink="false">https://www.thisisanfield.com/?p=77</guid>
+		<description><![CDATA[<p>Summary of Dominik Szoboszlai return timeline revealed after hamstring injury&#8230;</p>]]></description>
+		<content:encoded><![CDATA[<p>Full article body.</p>]]></content:encoded>
+	</item>
+</channel></rss>

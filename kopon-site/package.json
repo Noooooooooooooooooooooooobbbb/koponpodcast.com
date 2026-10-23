@@ -1,0 +1,13 @@
+{
+  "name": "kop-on-website",
+  "version": "2.0.0",
+  "private": true,
+  "description": "The Kop On! podcast website: built from the podcast RSS feed, with live LFC news and comments.",
+  "type": "module",
+  "engines": { "node": ">=18.17" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev-server.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}
