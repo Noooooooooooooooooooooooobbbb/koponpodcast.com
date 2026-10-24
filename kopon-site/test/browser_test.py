@@ -546,7 +546,10 @@ def main():
             check(re.sub(r'\s+', ' ', page.inner_text('h1')).strip().lower() == 'liverpool v brighton', 'preview heading', page.inner_text('h1'))
             check(page.locator('.points li').count() >= 6, f'talking points ({page.locator(".points li").count()})')
             news = page.inner_text('#news-h + .two')
-            check('Dominik Szoboszlai' in news and 'Solly March' in news and 'DOUBTFUL' in news.upper(), 'team news: injuries for both sides')
+            check('Dominik Szoboszlai' in news and 'Giovanni Leoni' in news and 'Solly March' in news, 'team news: injuries for both sides, from FPL (Leoni included)')
+            check('50% CHANCE' in news.upper() and 'Knee injury' in news and 'chance of playing' not in news and 'news from 23 Oct' in news, 'doubts show the chance of playing once, with the date of the news')
+            check('Danny Welbeck' not in news and 'Federico Chiesa' not in news, 'fit players and loanees are not listed')
+            check('official Fantasy Premier League data' in page.inner_text('#news-h ~ .fine'), 'the source is credited')
             check(page.locator('.form-list').nth(0).locator('li').count() == 5, 'last five for each side')
             check(page.locator('table.duel').count() == 2, 'season and league numbers side by side')
             check(page.locator('#h2h-h').count() == 1 and page.locator('#comments').count() == 1, 'recent meetings and a match thread')
@@ -600,6 +603,28 @@ def main():
             page.click('#xi-last'); page.wait_for_timeout(100)
             labels = page.eval_on_selector_all('.spot-btn', 'e => e.map(x => x.getAttribute("aria-label"))')
             check(all('empty' not in l for l in labels) and labels[0].startswith('GK: Alisson Becker') and not page.is_disabled('#xi-save'), 'Start from the last XI fills all 11 and enables Save')
+            # the zoomed-in half pitch: back line on the edge of the box, striker by the centre spot,
+            # and in every formation no face or name runs into another or off the pitch
+            geo = page.evaluate("""() => {
+              const mid = (e) => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; };
+              const H = document.getElementById('xi-pitch').getBoundingClientRect().height;
+              const face = (slot) => mid(document.querySelector(`.spot-btn[data-slot="${slot}"] .face`));
+              const box = document.querySelector('.pl-box').getBoundingClientRect().top, spot = mid(document.querySelector('.pl-cspot'));
+              return { back: Math.max(...[1,2,3,4].map((i) => Math.abs(face(i) - box))) / H, front: Math.abs(face(10) - spot) / H, gk: face(0) > box };
+            }""")
+            check(geo['back'] < 0.04 and geo['front'] < 0.04 and geo['gk'], f"half pitch: back four on the edge of the box, striker by the centre spot ({geo})")
+            clashes = []
+            for f in page.eval_on_selector_all('#xi-formations .chip', 'e => e.map(x => x.dataset.f)'):
+                page.click(f'#xi-formations .chip[data-f="{f}"]'); page.wait_for_timeout(120)
+                n = page.evaluate("""() => {
+                  const P = document.getElementById('xi-pitch').getBoundingClientRect();
+                  const parts = [...document.querySelectorAll('#xi-spots .spot')].flatMap((s, i) => [...s.querySelectorAll('.face, .spot-name')].map((e) => ({ i, r: e.getBoundingClientRect() })));
+                  let bad = parts.filter((p) => p.r.left < P.left - 1 || p.r.right > P.right + 1 || p.r.top < P.top - 1 || p.r.bottom > P.bottom + 1).length;
+                  for (const a of parts) for (const b of parts) if (a.i < b.i && Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left) > 1 && Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top) > 1) bad++;
+                  return bad; }""")
+                if n: clashes.append(f'{f}: {n}')
+            check(not clashes, f'all 10 formations: no faces or names overlap or leave the pitch {clashes}')
+            page.click('#xi-last'); page.wait_for_timeout(120)  # back to the last XI for the checks below
             page.click('.spot-btn[data-slot="1"]'); page.fill('#pk-search', 'konate'); page.keyboard.press('Enter'); page.wait_for_timeout(100)
             l1, l2 = page.get_attribute('.spot-btn[data-slot="1"]', 'aria-label'), page.get_attribute('.spot-btn[data-slot="2"]', 'aria-label')
             check('Konate' in l1 and 'Frimpong' in l2, 'picking someone already in the team swaps them over')
@@ -640,6 +665,7 @@ def main():
             check(page.is_visible('#opp-drawer') and page.get_attribute('#opp-tab', 'aria-expanded') == 'true' and page.evaluate("document.activeElement.id") == 'opp-h', 'the side tab flips out Brighton’s predicted XI')
             dr = page.inner_text('#opp-drawer')
             check(page.evaluate("document.querySelectorAll('#opp-drawer .spot').length") == 11 and 'MINTEH' in dr.upper() and 'Solly March' in dr and '4-2-3-1' in dr, 'predicted XI: 11 players, Minteh in for the injured March')
+            check('HINSHELWOOD' in dr.upper() and '25% chance' in dr and 'Jason Steele' in dr, 'Mitoma (25%) swapped out too; doubts listed with their chance')
             for _ in range(6): page.keyboard.press('Tab')
             check(page.evaluate("document.getElementById('opp-drawer').contains(document.activeElement)"), 'Tab keeps the keyboard inside the open drawer')
             page.keyboard.press('Escape'); page.wait_for_timeout(350)

@@ -1,7 +1,7 @@
 // Pick your XI: choose a formation and eleven players on the pitch, save it,
 // then compare with the fans' combined XI. Also opens the opposition's
 // predicted line-up from the tab on the side.
-import { formationSlots, fansXI, emptyLineupAgg, remapXI, nearestFormation } from './fans-core.js';
+import { formationSlots, fansXI, emptyLineupAgg, remapXI, nearestFormation, pitchPos, PITCH_LINES } from './fans-core.js';
 import { face, esc, LINE_NAMES, LINE_SHORT } from './fans-ui.js';
 
 const D = JSON.parse(document.getElementById('lineup-data')?.textContent || 'null');
@@ -44,13 +44,13 @@ if (D) {
     const S = slots();
     $('xi-spots').innerHTML = S.map((s, i) => {
       const p = state.xi[i] ? byId.get(state.xi[i]) : null;
-      const pos = `left:${(s.x * 100).toFixed(1)}%;top:${(s.y * 100).toFixed(1)}%`;
+      const pos = pitchPos(s);
       if (!p) {
         return `<li class="spot" style="${pos}"><button type="button" class="spot-btn spot-empty" data-slot="${i}" aria-label="${s.role}: empty. Choose a player"${closed() ? ' disabled' : ''}><span class="spot-plus" aria-hidden="true">+</span><span class="spot-role" aria-hidden="true">${s.role}</span></button></li>`;
       }
       const cap = state.captain === p.id;
       const warn = p.out ? ` spot-${p.out.why === 'Doubtful' ? 'doubt' : 'out'}` : '';
-      return `<li class="spot" style="${pos}"><button type="button" class="spot-btn${warn}" data-slot="${i}" draggable="${closed() ? 'false' : 'true'}" aria-label="${s.role}: ${esc(p.name)}${p.num ? `, number ${esc(p.num)}` : ''}${cap ? ', captain' : ''}${p.out ? `, ${esc(p.out.why.toLowerCase())}` : ''}. Change"${closed() ? ' disabled' : ''}>${face(p, { size: 'lg' })}${cap ? '<span class="armband" aria-hidden="true">C</span>' : ''}${p.flag ? `<img class="spot-flag" src="${esc(p.flag)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}${p.num ? `<span class="spot-num" aria-hidden="true">${esc(p.num)}</span>` : ''}<span class="spot-name" aria-hidden="true">${esc(p.short)}</span></button></li>`;
+      return `<li class="spot" style="${pos}"><button type="button" class="spot-btn${warn}" data-slot="${i}" draggable="${closed() ? 'false' : 'true'}" aria-label="${s.role}: ${esc(p.name)}${p.num ? `, number ${esc(p.num)}` : ''}${cap ? ', captain' : ''}${p.out ? `, ${esc(p.out.why === 'Doubtful' && p.out.chance != null ? `${p.out.chance}% chance of playing` : p.out.why.toLowerCase())}` : ''}. Change"${closed() ? ' disabled' : ''}>${face(p, { size: 'lg' })}${cap ? '<span class="armband" aria-hidden="true">C</span>' : ''}${p.flag ? `<img class="spot-flag" src="${esc(p.flag)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}${p.num ? `<span class="spot-num" aria-hidden="true">${esc(p.num)}</span>` : ''}<span class="spot-name" aria-hidden="true">${esc(p.short)}</span></button></li>`;
     }).join('');
     const n = filled();
     $('xi-count').textContent = closed() ? 'Picks have closed for this match.' : n === 11 ? `All 11 picked${state.captain ? '' : ' (tap a player to make them captain, if you like)'}.` : `${n} of 11 picked.`;
@@ -92,7 +92,7 @@ if (D) {
       const tags = [];
       if (at === current) tags.push('<span class="tag tag-on">Picked here</span>');
       else if (at >= 0) tags.push(`<span class="tag">In your XI · ${S[at].role}</span>`);
-      if (p.out) tags.push(`<span class="tag tag-${p.out.why === 'Doubtful' ? 'doubt' : 'out'}">${esc(p.out.why)}${p.out.detail ? `: ${esc(p.out.detail)}` : ''}</span>`);
+      if (p.out) tags.push(`<span class="tag tag-${p.out.why === 'Doubtful' ? 'doubt' : 'out'}">${esc(p.out.why === 'Doubtful' && p.out.chance != null ? `${p.out.chance}% chance` : p.out.why)}${p.out.detail ? `: ${esc(p.out.detail)}` : ''}</span>`);
       return `<li><button type="submit" value="pick" class="pk-row" data-id="${esc(p.id)}"${at === current ? ' aria-current="true"' : ''}>${face(p, { size: 'md' })}<span class="pk-num">${esc(p.num || '')}</span><span class="pk-name"><b>${esc(p.name)}</b><small>${LINE_SHORT[p.line]}${p.nation ? ` · ${esc(p.nation)}` : ''}</small>${tags.length ? `<span class="tags">${tags.join('')}</span>` : ''}</span></button></li>`;
     }).join('') : '<li class="pk-empty">Nobody matches that.</li>';
     $('pk-lines').querySelectorAll('.chip').forEach((b) => b.setAttribute('aria-pressed', +b.dataset.line === lineFilter && !q ? 'true' : 'false'));
@@ -203,7 +203,7 @@ if (D) {
     const spots = X.xi.map((id, i) => {
       const p = id && byId.get(id); const s = S[i];
       if (!p) return '';
-      return `<li class="spot spot-ro" style="left:${(s.x * 100).toFixed(1)}%;top:${(s.y * 100).toFixed(1)}%">${face(p, { size: 'sm' })}${X.captain === id ? '<span class="armband" aria-hidden="true">C</span>' : ''}<span class="spot-name">${esc(p.short)}</span><span class="spot-pct">${X.pct[id]}%</span><span class="visually-hidden">${esc(p.name)}, picked by ${X.pct[id]}% of fans</span></li>`;
+      return `<li class="spot spot-ro" style="${pitchPos(s)}">${face(p, { size: 'sm' })}${X.captain === id ? '<span class="armband" aria-hidden="true">C</span>' : ''}<span class="spot-name">${esc(p.short)}</span><span class="spot-pct">${X.pct[id]}%</span><span class="visually-hidden">${esc(p.name)}, picked by ${X.pct[id]}% of fans</span></li>`;
     }).join('');
     const mine = saved?.vote;
     const same = mine ? mine.xi.filter((id) => X.xi.includes(id)).length : null;
@@ -212,7 +212,7 @@ if (D) {
     box.innerHTML = `<h2 class="h2" id="fx-h">The fans’ XI</h2>
 <p class="fine">${A.n === 1 ? 'From 1 fan’s pick' : `From ${A.n.toLocaleString('en-GB')} fans’ picks`} · ${esc(X.formation)}${X.captain && byId.get(X.captain) ? ` · captain ${esc(byId.get(X.captain).short)}` : ''}</p>
 ${same != null ? `<p class="fx-score"><span class="fx-big">${same}<small>/11</small></span> of your players are in the fans’ XI${same === 11 ? '. Great minds!' : '.'}</p>` : ''}
-<div class="pitch pitch-mini" aria-label="The fans’ combined XI"><div class="pitch-lines" aria-hidden="true"><span class="pl-half"></span><span class="pl-circle"></span><span class="pl-box"></span><span class="pl-six"></span></div><ol class="spots">${spots}</ol></div>
+<div class="pitch pitch-mini" aria-label="The fans’ combined XI">${PITCH_LINES}<ol class="spots">${spots}</ol></div>
 <p class="fine">Most popular formations: ${esc(forms)}.</p>
 ${others.length ? `<h3 class="h3">Just missed out</h3><ul class="fx-others">${others.map(([id, pc]) => { const p = byId.get(id); return `<li>${face(p, { size: 'xs' })}<span>${esc(p.name)}</span><span class="rbar" aria-hidden="true"><span style="width:${pc}%"></span></span><b>${pc}%</b></li>`; }).join('')}</ul>` : ''}`;
   }

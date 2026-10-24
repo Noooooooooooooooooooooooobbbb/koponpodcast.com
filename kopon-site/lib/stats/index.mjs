@@ -5,19 +5,9 @@ import * as E from './espn.mjs';
 import { fdGet, fdTable, fdScorers, apiFootball, playerSeason, afInjuries } from './sources.mjs';
 import { buildFans } from '../fans/build.mjs';
 
-// "Man United" = "Manchester United FC", but never "Manchester City" (from Flappy Jim)
-const CLUB_ALIAS = { 'man united': 'manchester united', 'man utd': 'manchester united', 'man city': 'manchester city', spurs: 'tottenham hotspur', tottenham: 'tottenham hotspur', wolves: 'wolverhampton wanderers', 'nottm forest': 'nottingham forest', 'nott m forest': 'nottingham forest', 'west ham': 'west ham united', psg: 'paris saint germain', inter: 'internazionale', atletico: 'atletico madrid', bayern: 'bayern munich', 'bayern munchen': 'bayern munich', 'brighton hove': 'brighton and hove albion', brighton: 'brighton and hove albion' };
-export function clubNorm(n) {
-  const x = String(n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\b(fc|afc|cf|sc|ac|ssc|club|de|the)\b/g, ' ').replace(/\s+/g, ' ').trim();
-  return CLUB_ALIAS[x] || x;
-}
-export function sameClub(a, b) {
-  const A = clubNorm(a), B = clubNorm(b); if (!A || !B) return false; if (A === B) return true;
-  const ta = A.split(' '), tb = B.split(' '), [sh, lo] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
-  if (sh[0] === lo[0] && sh.every((t) => lo.includes(t)) && !(sh.length === 1 && ['manchester', 'sheffield', 'bristol', 'real', 'athletic', 'sporting', 'inter'].includes(sh[0]))) return true;
-  return sh.length === 1 && sh[0].length >= 5 && lo.includes(sh[0]) && !['united', 'city', 'town', 'rovers', 'athletic', 'wanderers', 'albion', 'county', 'forest', 'hotspur', 'madrid', 'munich'].includes(sh[0]);
-}
-export const findRow = (rows, team) => rows.find((r) => [r.name, r.full, r.short].some((x) => x && [team.name, team.shortName, team.short].some((y) => y && (x === y || sameClub(x, y)))));
+export { clubNorm, sameClub, findRow } from './clubs.mjs';
+import { sameClub, findRow } from './clubs.mjs';
+import { fetchFpl, fplOut } from './fpl.mjs';
 
 const tableKey = (league) => (/premier league/i.test(league) ? 'pl' : /champions league/i.test(league) ? 'ucl' : null);
 
@@ -120,6 +110,11 @@ export async function buildStats({ fetchImpl, env = {}, config, now = new Date()
     const upcoming = mine.upcoming.slice(0, sc.nextCount || 5);
     // only a confirmed kick-off time is used to time the matchday rebuilds
     data.nextKickoff = upcoming[0] && !upcoming[0].tbc ? upcoming[0].date : null;
+    // team news for Premier League clubs: the Premier League's own Fantasy Premier League data
+    const fp = await fetchFpl(fetchImpl, { cache, now, signal });
+    if (fp.fpl) note('Team news (Fantasy Premier League)', true, `${fp.fpl.list.length} players injured, doubtful or suspended${fp.fresh ? '' : ` (from the last update: ${fp.error})`}`);
+    else note('Team news (Fantasy Premier League)', false, `${fp.error}; used ESPN and API-Football instead`);
+    data.fplNews = fp.fpl ? fp.fpl.t : null;
     const usedSlugs = new Set();
     for (const ev of upcoming) {
       const isHome = ev.home.id === team.id;
@@ -150,13 +145,26 @@ export async function buildStats({ fetchImpl, env = {}, config, now = new Date()
             }
           } catch (err) { /* injuries are a bonus */ }
         }
+        // FPL's list replaces the others for Premier League clubs (it's kept up to date by the Premier League;
+        // ESPN's often isn't). In other competitions a ban from ESPN / API-Football still counts.
+        const newsSrc = { home: [], away: [] };
+        for (const side of ['home', 'away']) {
+          const club = ev[side];
+          const known = fp.fpl && fplOut(fp.fpl, club) ? await E.rosterNames(espn, club, ev).catch(() => []) : [];
+          const list = fp.fpl ? fplOut(fp.fpl, club, { league: ev.league, known }) : null;
+          if (!list) { newsSrc[side] = ['ESPN', ...(usedAf ? ['API-Football'] : [])]; continue; }
+          const pl = /premier league/i.test(ev.league || '');
+          const bans = pl ? [] : out[side].filter((o) => o.why === 'Suspended' && !list.some((x) => E.sameName(x.name, o.name)));
+          out[side] = [...list, ...bans];
+          newsSrc[side] = ['Fantasy Premier League', ...(bans.length ? ['ESPN'] : [])];
+        }
         const tk = tableKey(ev.league);
         const table = tk && data.tables[tk] ? data.tables[tk].rows : [];
         const seasons = { home: E.teamSeason(fixOf[ev.home.id], ev.home.id, now), away: E.teamSeason(fixOf[ev.away.id], ev.away.id, now) };
         const ranks = tk === 'pl' ? data.ranks : null;
         const tableRows = { home: table.length ? findRow(table, ev.home) : null, away: table.length ? findRow(table, ev.away) : null };
         const points = E.talkingPoints({ ev, form, h2h, table, rows: tableRows, out, ranks });
-        data.previews.push({ ...card, afInjuries: usedAf, form, h2h, out, seasons, tableKey: tk, tableRows, points, venue: sum.gameInfo?.venue?.fullName || ev.venue || '' });
+        data.previews.push({ ...card, afInjuries: usedAf, newsSources: newsSrc, form, h2h, out, seasons, tableKey: tk, tableRows, points, venue: sum.gameInfo?.venue?.fullName || ev.venue || '' });
       } catch (err) {
         data.previews.push({ ...card, error: err.message, form: { home: [], away: [] }, h2h: [], out: { home: [], away: [] }, seasons: null, points: [] });
       }

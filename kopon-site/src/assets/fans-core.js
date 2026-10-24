@@ -46,10 +46,34 @@ export function formationSlots(f) {
   rows.forEach(([y, xs], k) => {
     const nm = names(k, xs.length);
     const line = k === 0 ? 1 : k === n - 1 ? 3 : 2;
-    xs.forEach((x, i) => out.push({ role: nm[i], line, x, y }));
+    // gap: room to the nearest team-mate in the same row (so names never run into each other)
+    xs.forEach((x, i) => out.push({ role: nm[i], line, x, y, row: k, rows: n, gap: Math.min(...xs.filter((_, j) => j !== i).map((o) => Math.abs(o - x)), 0.5) }));
   });
   return out;
 }
+
+// Where a position is drawn on the half-pitch picture (Liverpool's half, attacking upwards):
+// the pitch shows the halfway line near the top and our goal line near the bottom, to scale
+// top to bottom: 1 metre = PITCH.m % of the pitch's height. The back line stands on the edge of
+// the penalty box (17.5 m out), the striker just below the centre spot (about 52 m out), the
+// keeper in the six-yard box. Formation positions (y: 0.74 back line → 0.2 striker) map in between.
+// The rows in between are spread evenly, so there's always room for a face and a name.
+export const PITCH = { goal: 96, half: 12, m: 1.6, back: 17.5, front: 52.3, keeper: 4, squeeze: 0.88 };
+export function pitchDepth(slot) {
+  if (slot.line === 0) return PITCH.keeper;
+  if (slot.rows > 1 && slot.row != null) return PITCH.back + (slot.row * (PITCH.front - PITCH.back)) / (slot.rows - 1);
+  return Math.max(PITCH.back, Math.min(PITCH.front, 65.2 - 64.4 * slot.y));
+}
+export function pitchPos(slot) {
+  const top = PITCH.goal - pitchDepth(slot) * PITCH.m;
+  // wide players come in a little from the touchline, so their names fit on the pitch
+  const x = 0.5 + (slot.x - 0.5) * PITCH.squeeze;
+  const room = Math.min((slot.gap ?? 0.5) * PITCH.squeeze, 2 * x, 2 * (1 - x), 0.5);
+  const w = Math.max(0, room * 100 - 1);
+  return `left:${(x * 100).toFixed(1)}%;top:${top.toFixed(1)}%;width:${w.toFixed(1)}%`;
+}
+// the markings, shared by every pitch on the site
+export const PITCH_LINES = '<div class="pitch-lines" aria-hidden="true"><span class="pl-half"></span><span class="pl-circle"></span><span class="pl-cspot"></span><span class="pl-arc"></span><span class="pl-box"></span><span class="pl-six"></span><span class="pl-pspot"></span></div>';
 
 // Moves a team into another formation, keeping each player in the same part
 // of the pitch where possible (keeper, defence, midfield, attack).

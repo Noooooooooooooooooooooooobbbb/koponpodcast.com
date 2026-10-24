@@ -1,6 +1,6 @@
 // The Stats page (/stats/) and a preview page per upcoming match (/stats/<slug>/).
 // Everything that came from an API is escaped with esc().
-import { esc, jsonForScript } from '../lib/text.mjs';
+import { esc, jsonForScript, slugify } from '../lib/text.mjs';
 import { layout, commentsBlock } from './templates.mjs';
 
 // ---- formatting ----------------------------------------------------------------------
@@ -224,9 +224,19 @@ function formRow(list) {
   return `<ol class="form-list">${list.map((f) => `<li>${badge(f.r)}<span class="fl-score">${esc(f.gs?.[0])}–${esc(f.gs?.[1])}</span><span class="fl-opp">${f.at === 'H' ? 'v' : 'at'} ${esc(f.opp)}</span><span class="fl-meta">${esc(compName(f.comp))} · ${esc(fmtDay(f.date))}</span></li>`).join('')}</ol>`;
 }
 
+const CREDIT = { 'Fantasy Premier League': 'the Premier League (official Fantasy Premier League data)', ESPN: 'ESPN', 'API-Football': 'API-Football' };
+function newsCredit(p) {
+  const used = p.newsSources ? [...new Set([...(p.newsSources.home || []), ...(p.newsSources.away || [])])] : ['ESPN', ...(p.afInjuries ? ['API-Football'] : [])];
+  const order = Object.keys(CREDIT);
+  const names = used.sort((a, b) => order.indexOf(a) - order.indexOf(b)).map((u) => CREDIT[u] || u);
+  const list = names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] || 'ESPN';
+  return `Injury and suspension news from ${esc(list)}, refreshed every few hours and on matchday; check the club's own news before kick-off.`;
+}
+
 function newsList(list) {
   if (!list?.length) return '<p class="fine">No injuries or suspensions reported.</p>';
-  return `<ul class="out-list">${list.map((o) => `<li><span class="out-name">${esc(o.name)}</span><span class="out-why why-${esc(o.why.toLowerCase())}">${esc(o.why)}</span>${o.detail && o.detail.toLowerCase() !== o.why.toLowerCase() ? `<span class="out-detail">${esc(o.detail)}</span>` : ''}</li>`).join('')}</ul>`;
+  const label = (o) => (o.why === 'Doubtful' && o.chance != null ? `${o.chance}% chance` : o.why);
+  return `<ul class="out-list">${list.map((o) => `<li><span class="out-name">${esc(o.name)}</span><span class="out-why why-${esc(slugify(o.why))}">${esc(label(o))}</span>${o.detail && o.detail.toLowerCase() !== o.why.toLowerCase() ? `<span class="out-detail">${esc(o.detail)}${o.since ? ` <span class="out-since">(news from ${esc(o.since)})</span>` : ''}</span>` : ''}</li>`).join('')}</ul>`;
 }
 
 function seasonCompare(p) {
@@ -292,7 +302,7 @@ ${p.error ? '<p class="stats-empty">Some of the numbers for this match could not
 <div class="two"><div><h3 class="h3">${esc(hn)}</h3>${formRow(p.form?.home)}</div><div><h3 class="h3">${esc(an)}</h3>${formRow(p.form?.away)}</div></div></section>
 <section class="block" aria-labelledby="news-h"><h2 class="h2" id="news-h">Team news</h2>
 <div class="two"><div><h3 class="h3">${esc(hn)}</h3>${newsList(p.out?.home)}</div><div><h3 class="h3">${esc(an)}</h3>${newsList(p.out?.away)}</div></div>
-<p class="fine">Injury and suspension lists from ESPN${p.afInjuries ? ' and API-Football' : ''}; check the club's own news before kick-off.</p></section>
+<p class="fine">${newsCredit(p)}</p></section>
 ${seasonCompare(p)}
 ${leagueCompare(ctx, p)}
 ${tableSnippet(ctx, p)}

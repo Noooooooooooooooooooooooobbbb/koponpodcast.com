@@ -64,15 +64,24 @@ test('stats: previews have form, team news, table rows and readable talking poin
   assert.equal(bri.form.home.length, 5);
   assert.equal(bri.form.away.length, 5);
   assert.equal(bri.form.home[0].opp, 'Villarreal');
-  // ESPN injuries + API-Football's list, with "D. Szoboszlai" recognised as the same man
-  assert.deepEqual(bri.out.home.map((o) => o.name), ['Dominik Szoboszlai']);
-  assert.deepEqual(bri.out.away.map((o) => [o.name, o.why]), [['Solly March', 'Out'], ['Danny Welbeck', 'Doubtful'], ['Kaoru Mitoma', 'Doubtful']]);
-  assert.ok(!bri.out.home.some((o) => o.name === 'Victor Munoz'), 'day-to-day players are not listed as out');
+  // Premier League clubs: the Fantasy Premier League list (kept up to date by the Premier League) replaces ESPN's
+  assert.deepEqual(bri.out.home.map((o) => [o.name, o.why, o.chance]), [['Dominik Szoboszlai', 'Out', null], ['Giovanni Leoni', 'Out', null], ['Wataru Endo', 'Suspended', null], ['Victor Munoz', 'Doubtful', 50], ['Alisson Becker', 'Doubtful', 75]]);
+  assert.equal(bri.out.home[0].detail, 'Hamstring injury - Expected back 08 Nov');
+  assert.equal(bri.out.home[0].since, '23 Oct');
+  assert.ok(!bri.out.home.some((o) => /chiesa|salah/i.test(o.name)), 'loanees and fit players left out');
+  // ESPN still says Welbeck is doubtful, FPL says he's fit again: FPL wins
+  assert.deepEqual(bri.out.away.map((o) => [o.name, o.why, o.chance]), [['Solly March', 'Out', null], ['Kaoru Mitoma', 'Doubtful', 25], ['Jason Steele', 'Doubtful', 50]]);
+  assert.deepEqual(bri.newsSources, { home: ['Fantasy Premier League'], away: ['Fantasy Premier League'] });
+  assert.ok(data.sources.find((x) => /Fantasy Premier League/.test(x.name)).ok);
   // Champions League: table rows found by name, Real Madrid's suspension
   assert.equal(rma.tableKey, 'ucl');
   assert.equal(rma.tableRows.home.name, 'Real Madrid');
   assert.equal(rma.tableRows.away.name, 'Liverpool');
   assert.deepEqual(rma.out.home.map((o) => o.why), ['Suspended']);
+  // Real Madrid aren't in the Premier League: ESPN / API-Football. Liverpool's list is FPL's,
+  // minus Endo's ban (Premier League only)
+  assert.deepEqual(rma.newsSources.home, ['ESPN', 'API-Football']);
+  assert.deepEqual(rma.out.away.map((o) => o.name), ['Dominik Szoboszlai', 'Giovanni Leoni', 'Victor Munoz', 'Alisson Becker']);
   assert.ok(rma.points.includes('They are level on points.'));
   // cup game: no table
   assert.equal(cup.tableKey, null);
@@ -381,9 +390,60 @@ test('review fixes: preview table colours use the full table; bad dates never st
   assert.doesNotThrow(() => previewPage(ctx, broken));
   const d2 = structuredClone(data); d2.results[0].date = ''; d2.updated = null;
   assert.doesNotThrow(() => statsPage({ ...ctx, stats: d2 }));
-  assert.match(html, /Injury and suspension lists from ESPN;/, 'API-Football not credited when it supplied nothing for this match');
-  const bri = previewPage(ctx, data.previews[0]);
-  assert.match(bri, /from ESPN and API-Football/);
+  assert.match(html, /Injury and suspension news from the Premier League \(official Fantasy Premier League data\), refreshed/, 'two Premier League clubs: FPL only');
+  assert.match(html, /50% chance/);
+  assert.match(html, /\(news from 23 Oct\)/);
+  const rma = previewPage(ctx, data.previews[1]);
+  assert.match(rma, /from the Premier League \(official Fantasy Premier League data\), ESPN and API-Football/);
+});
+
+test('team news: FPL down or mid-update: last good list for up to 3 days, then ESPN and API-Football', async () => {
+  const { fplState } = await import('./fixtures/stats-fixtures.mjs');
+  const cache = {};
+  await run({}, KEYS, cache); // a good build remembers FPL's list
+  assert.ok(cache.fpl?.list?.length > 5 && !JSON.stringify(cache.fpl).includes('Salah'), 'only players with news are kept');
+  try {
+    fplState.mode = 'updating';
+    let r = await run({}, KEYS, cache);
+    assert.equal(r.data.previews[0].out.home[1].name, 'Giovanni Leoni', 'remembered list used while the game is updating');
+    assert.match(r.data.sources.find((x) => /Fantasy/.test(x.name)).detail, /being updated/);
+    // more than 3 days old: fall back to ESPN + API-Football
+    cache.fpl.t = new Date(TEST_NOW - 4 * 86400000).toISOString();
+    fplState.mode = 'down';
+    r = await run({}, KEYS, cache);
+    const bri = r.data.previews[0];
+    assert.deepEqual(bri.out.home.map((o) => o.name), ['Dominik Szoboszlai'], 'ESPN + API-Football, "D. Szoboszlai" recognised');
+    assert.deepEqual(bri.out.away.map((o) => [o.name, o.why]), [['Solly March', 'Out'], ['Danny Welbeck', 'Doubtful'], ['Kaoru Mitoma', 'Doubtful']]);
+    assert.ok(!bri.out.home.some((o) => o.name === 'Victor Munoz'), 'day-to-day players are not listed as out');
+    assert.equal(r.data.sources.find((x) => /Fantasy/.test(x.name)).ok, false);
+    const ctx = { config: siteConfig, assets: new Proxy({}, { get: (_, k) => `/assets/${String(k)}` }), comments: { provider: 'none' }, builtAt: TEST_NOW, stats: r.data };
+    assert.match(previewPage(ctx, bri), /news from ESPN and API-Football, refreshed/);
+    assert.match(previewPage(ctx, r.data.previews.find((p) => p.slug.endsWith('arsenal'))), /news from ESPN, refreshed/, 'API-Football not credited when it supplied nothing for this match');
+  } finally { fplState.mode = 'ok'; }
+});
+
+test('team news: FPL statuses, names and competitions', async () => {
+  const { slimFpl, fplOut, nameFor } = await import('../lib/stats/fpl.mjs');
+  const { FPL } = await import('./fixtures/stats-fixtures.mjs');
+  const fpl = slimFpl(FPL);
+  assert.throws(() => slimFpl({ elements: [] }), /unexpected/);
+  assert.equal(fplOut(fpl, { name: 'Villarreal' }), null, 'not a Premier League club');
+  assert.equal(fplOut(fpl, { name: 'Aston Villa' }).length, 0);
+  assert.equal(fplOut(fpl, { name: 'Arsenal', shortName: 'Arsenal' })[0].name, 'Bukayo Saka');
+  const ucl = fplOut(fpl, { name: 'Liverpool' }, { league: 'UEFA Champions League' });
+  assert.ok(!ucl.some((o) => o.why === 'Suspended'), 'a Premier League ban does not count in Europe');
+  assert.equal(nameFor({ first: 'Alisson', second: 'Ramses Becker', web: 'Alisson' }, ['Alisson Becker', 'Becker']), 'Alisson Becker');
+  assert.equal(nameFor({ first: 'Víctor', second: 'Muñoz', web: 'Muñoz' }, ['Victor Munoz']), 'Victor Munoz');
+  assert.equal(nameFor({ first: 'Rhys', second: 'Williams', web: 'R.Williams' }, ['Neco Williams']), 'Rhys Williams', 'a shared surname is not enough');
+  // edge cases: 0% doubtful = out; unavailable for personal reasons is shown, transfers aren't; "not eligible" only in the league
+  const odd = slimFpl({ teams: FPL.teams, elements: [
+    { team: 14, first_name: 'A', second_name: 'Zero', web_name: 'Zero', status: 'd', news: 'Knock - 0% chance of playing', chance_of_playing_next_round: 0 },
+    { team: 14, first_name: 'B', second_name: 'Away', web_name: 'Away', status: 'u', news: 'Personal reasons' },
+    { team: 14, first_name: 'C', second_name: 'Gone', web_name: 'Gone', status: 'u', news: 'Has left the club permanently' },
+    { team: 14, first_name: 'D', second_name: 'Loanee', web_name: 'Loanee', status: 'n', news: 'Ineligible to face parent club' },
+  ] });
+  assert.deepEqual(fplOut(odd, { name: 'Liverpool' }).map((o) => [o.name, o.why]), [['A Zero', 'Out'], ['D Loanee', 'Not eligible'], ['B Away', 'Unavailable']]);
+  assert.deepEqual(fplOut(odd, { name: 'Liverpool' }, { league: 'FA Cup' }).map((o) => o.name), ['A Zero', 'B Away']);
 });
 
 test('review fixes: rebuild while a match was still going', () => {

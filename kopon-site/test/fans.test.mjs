@@ -176,7 +176,7 @@ test('ESPN line-ups go into the right formation positions; predicted XI swaps th
   assert.equal(lbSlot.name, 'Sub Fb');
   assert.equal(lbSlot.predicted, true);
   assert.ok(pred.xi.some((p) => p.name === 'St'), 'doubtful players are kept');
-  assert.deepEqual(pred.changes, [{ out: 'Lb', why: 'Out', detail: 'Knee', in: 'Sub Fb' }]);
+  assert.deepEqual(pred.changes, [{ out: 'Lb', why: 'Out', detail: 'Knee', chance: null, in: 'Sub Fb' }]);
   assert.equal(pred.basedOn.opp, 'Others');
   assert.equal(await predictedXI(espn, { id: '7' }, fixtures, [], null), null, 'no line-up: no prediction');
 });
@@ -193,7 +193,8 @@ test('the stats build makes the fan zone (squad, last XI, opposition XI, matches
   assert.equal(vvd.num, '4'); assert.equal(vvd.short, 'van Dijk'); assert.match(vvd.flag, /^https:\/\//); assert.match(vvd.photo, /images\.fotmob\.com.*33004\.png$/);
   assert.equal(F.squad.find((p) => p.id === 'conor-bradley').photo, '', 'no wrong face for a player FotMob has no match for');
   assert.match(F.squad.find((p) => p.id === 'curtis-jones').photo, /upload\.wikimedia\.org/, "FotMob's blank silhouette is skipped for Wikipedia");
-  assert.deepEqual(F.squad.find((p) => p.id === 'dominik-szoboszlai').out, { why: 'Out', detail: 'Hamstring' });
+  assert.deepEqual(F.squad.find((p) => p.id === 'dominik-szoboszlai').out, { why: 'Out', detail: 'Hamstring injury - Expected back 08 Nov', chance: null });
+  assert.deepEqual(F.squad.find((p) => p.id === 'victor-munoz').out, { why: 'Doubtful', detail: 'Knee injury', chance: 50 });
   const L = F.lineup;
   assert.equal(L.opp.shortName, 'Brighton');
   assert.equal(L.kickoff, '2026-10-25T14:00Z');
@@ -205,7 +206,10 @@ test('the stats build makes the fan zone (squad, last XI, opposition XI, matches
   assert.equal(L.oppXI.xi.length, 11);
   assert.ok(!L.oppXI.xi.some((p) => p.name === 'Solly March'), 'injured player swapped out');
   assert.equal(L.oppXI.changes[0].out, 'Solly March');
-  assert.match(L.oppXI.xi.find((p) => p.name === 'Kaoru Mitoma').photo, /44022/);
+  // Mitoma is doubtful at 25% (FPL), which counts as missing for a prediction; Steele at 50% isn't
+  assert.ok(!L.oppXI.xi.some((p) => p.name === 'Kaoru Mitoma') && L.oppXI.changes.some((c) => c.out === 'Kaoru Mitoma'));
+  assert.ok(L.oppXI.out.some((o) => o.name === 'Jason Steele' && o.chance === 50));
+  assert.match(L.oppXI.xi.find((p) => p.name === 'Lewis Dunk').photo, /44005/);
   assert.equal(F.rate.length, 5);
   const m = F.rate[0];
   assert.equal(m.opp.shortName, 'Villarreal');

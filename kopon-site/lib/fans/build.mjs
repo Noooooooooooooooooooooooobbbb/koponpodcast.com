@@ -93,7 +93,8 @@ export async function predictedXI(espn, team, fixtures, out, ev) {
     .map((k) => ({ name: k.participants?.[0]?.athlete?.displayName, why: 'Suspended', detail: 'sent off last game' })).filter((x) => x.name);
   const missing = [...(out || [])];
   for (const r of reds) if (!missing.some((o) => E.sameName(o.name, r.name))) missing.push(r);
-  const isOut = (p) => missing.find((o) => E.sameName(o.name, p.name) && o.why !== 'Doubtful');
+  // doubtful at 25% or less (FPL's chance of playing) is as good as out for a prediction
+  const isOut = (p) => missing.find((o) => E.sameName(o.name, p.name) && (o.why !== 'Doubtful' || (o.chance != null && o.chance <= 25)));
   const bench = lu.subs.filter((p) => !isOut(p));
   const changes = [];
   const xi = lu.xi.map((p) => {
@@ -103,7 +104,7 @@ export async function predictedXI(espn, team, fixtures, out, ev) {
     const sub = pickFrom(bench.filter((s) => g && posLetter(s.pos) === g)) || (g === 'G' ? null : pickFrom(bench.filter((s) => posLetter(s.pos) !== 'G')));
     if (!sub) return { ...p, doubt: true };
     bench.splice(bench.indexOf(sub), 1);
-    changes.push({ out: p.name, why: o.why, detail: o.detail || '', in: sub.name });
+    changes.push({ out: p.name, why: o.why, detail: o.detail || '', chance: o.chance ?? null, in: sub.name });
     return { ...sub, pos: p.pos, predicted: true };
   });
   const formation = lu.formation || '4-3-3';
@@ -112,7 +113,7 @@ export async function predictedXI(espn, team, fixtures, out, ev) {
     formation,
     xi: orderForFormation(xi, formation).map((p) => ({ name: p.name, short: surname(p.name), num: p.num, pos: p.pos, predicted: !!p.predicted, doubt: !!p.doubt })),
     changes,
-    out: missing.map((o) => ({ name: o.name, why: o.why, detail: o.detail || '' })),
+    out: missing.map((o) => ({ name: o.name, why: o.why, detail: o.detail || '', chance: o.chance ?? null })),
     basedOn: { opp: opp.shortName || opp.name, date: last.date, comp: last.league },
   };
 }
@@ -198,7 +199,7 @@ export async function buildFans({ espn, fetchImpl, data, mine, cache, config, no
   const outNext = next ? (next.isHome ? next.out?.home : next.out?.away) || [] : [];
   for (const p of squad) {
     const o = outNext.find((x) => E.sameName(x.name, p.name));
-    if (o) p.out = { why: o.why || 'Out', detail: o.detail || '' };
+    if (o) p.out = { why: o.why || 'Out', detail: o.detail || '', chance: o.chance ?? null };
   }
 
   // ---- the line-up picker for the next match --------------------------------

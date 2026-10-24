@@ -31,7 +31,7 @@ const liveStatus = opt('--live-status', null);
 const statsCache = opt('--stats-cache', null);
 const sports = statsFetch({});
 const fixtureFetch = async (url, init) => {
-  if (/^https:\/\/(site\.api\.espn\.com|api\.football-data\.org|v3\.football\.api-sports\.io|www\.fotmob\.com|images\.fotmob\.com|www\.thesportsdb\.com|en\.wikipedia\.org)\//.test(url)) return args.includes('--stats-down') ? new Response('down', { status: 503 }) : sports(url, init);
+  if (/^https:\/\/(site\.api\.espn\.com|api\.football-data\.org|v3\.football\.api-sports\.io|www\.fotmob\.com|images\.fotmob\.com|www\.thesportsdb\.com|en\.wikipedia\.org|fantasy\.premierleague\.com)\//.test(url)) return args.includes('--stats-down') ? new Response('down', { status: 503 }) : sports(url, init);
   if (url.includes('/stats-cache.json')) return statsCache ? new Response(await readFile(statsCache, 'utf8')) : new Response('nope', { status: 404 });
   if (url.includes('youtube.com/feeds/')) return args.includes('--no-shorts') ? new Response('blocked', { status: 403 }) : new Response(await readFile(join(here, 'fixtures/youtube-shorts.xml'), 'utf8'));
   if (url.includes('/site-status.json')) return liveStatus ? new Response(await readFile(liveStatus, 'utf8')) : new Response('nope', { status: 404 });

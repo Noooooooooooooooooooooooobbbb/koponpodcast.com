@@ -156,6 +156,13 @@ export function sameName(a, b) {
 }
 const keepStatus = (st) => !/day-to-day|probable|available|active/i.test(st || '');
 
+// the squad's names as ESPN writes them (so FPL's "Alisson Ramses Becker" shows as "Alisson Becker")
+export async function rosterNames(espn, team, ev) {
+  const slug = ev?.slug && ev.slug !== 'all' ? ev.slug : 'eng.1';
+  const j = await espn.get(`${API}${slug}/teams/${team.id}/roster`).catch(() => null);
+  return (j?.athletes || []).flatMap((a) => (Array.isArray(a.items) ? a.items : [a])).map((a) => a.displayName || a.fullName).filter(Boolean);
+}
+
 export async function unavailable(espn, team, ev, sum) {
   const out = [];
   const add = (name, why, detail = '') => { if (name && !out.some((o) => sameName(o.name, name))) out.push({ name, why, detail }); };

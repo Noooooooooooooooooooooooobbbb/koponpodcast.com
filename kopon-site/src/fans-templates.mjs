@@ -4,7 +4,7 @@ import { esc, jsonForScript } from '../lib/text.mjs';
 import { layout } from './templates.mjs';
 import { compName } from './stats-templates.mjs';
 import { face, chip, matchLine } from './assets/fans-ui.js';
-import { formationSlots, FORMATION_NAMES } from './assets/fans-core.js';
+import { formationSlots, FORMATION_NAMES, pitchPos, PITCH_LINES } from './assets/fans-core.js';
 
 const UK = (opts) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', ...opts });
 const safe = (opts) => (d) => { const t = new Date(d); return d && Number.isFinite(t.getTime()) ? UK(opts).format(t) : ''; };
@@ -26,15 +26,15 @@ function oppDrawer(L) {
   const name = L.opp.shortName;
   const spots = P.xi.map((p, i) => {
     const s = slots[i] || { x: 0.5, y: 0.5 };
-    return `<li class="spot spot-ro${p.predicted ? ' is-predicted' : ''}${p.doubt ? ' is-doubt' : ''}" style="left:${(s.x * 100).toFixed(1)}%;top:${(s.y * 100).toFixed(1)}%">${face(p, { size: 'sm', team: 'opp' })}${p.num ? `<span class="spot-num" aria-hidden="true">${esc(p.num)}</span>` : ''}<span class="spot-name">${esc(p.short || p.name.split(' ').pop())}</span><span class="visually-hidden">${esc(p.name)}${p.predicted ? ' (predicted replacement)' : ''}${p.doubt ? ' (doubtful, no like-for-like replacement)' : ''}</span></li>`;
+    return `<li class="spot spot-ro${p.predicted ? ' is-predicted' : ''}${p.doubt ? ' is-doubt' : ''}" style="${pitchPos(s)}">${face(p, { size: 'sm', team: 'opp' })}${p.num ? `<span class="spot-num" aria-hidden="true">${esc(p.num)}</span>` : ''}<span class="spot-name">${esc(p.short || p.name.split(' ').pop())}</span><span class="visually-hidden">${esc(p.name)}${p.predicted ? ' (predicted replacement)' : ''}${p.doubt ? ' (doubtful, no like-for-like replacement)' : ''}</span></li>`;
   }).join('');
   return `<button type="button" class="opp-tab" id="opp-tab" aria-expanded="false" aria-controls="opp-drawer">${crest(L.opp.logo, 22)}<span>${esc(name)} predicted XI</span></button>
 <aside class="opp-drawer" id="opp-drawer" aria-labelledby="opp-h" hidden>
 <div class="opp-head"><h2 id="opp-h" tabindex="-1">${esc(name)}: predicted XI</h2><button type="button" class="ctrl opp-close" aria-label="Close ${esc(name)}’s predicted XI"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6z"/></svg></button></div>
 <p class="fine">${esc(P.formation)} · based on their line-up v ${esc(P.basedOn.opp)}${P.basedOn.date ? `, ${esc(fmtDay(P.basedOn.date))}` : ''}, with anyone injured or suspended swapped for a bench player.</p>
-<div class="pitch pitch-mini" aria-label="${esc(name)} predicted line-up"><div class="pitch-lines" aria-hidden="true"><span class="pl-half"></span><span class="pl-circle"></span><span class="pl-box"></span><span class="pl-six"></span></div><ol class="spots">${spots}</ol></div>
-${P.changes.length ? `<h3 class="h3">Changes from last time</h3><ul class="opp-list">${P.changes.map((c) => `<li><b>${esc(c.in)}</b> for ${esc(c.out)} <span class="muted">(${esc(c.why.toLowerCase())}${c.detail ? `: ${esc(c.detail)}` : ''})</span></li>`).join('')}</ul>` : ''}
-${P.out.length ? `<h3 class="h3">Missing or doubtful</h3><ul class="opp-list">${P.out.map((o) => `<li>${esc(o.name)} <span class="muted">${esc(o.why)}${o.detail ? `, ${esc(o.detail)}` : ''}</span></li>`).join('')}</ul>` : '<p class="fine">No injuries or suspensions reported.</p>'}
+<div class="pitch pitch-mini" aria-label="${esc(name)} predicted line-up">${PITCH_LINES}<ol class="spots">${spots}</ol></div>
+${P.changes.length ? `<h3 class="h3">Changes from last time</h3><ul class="opp-list">${P.changes.map((c) => `<li><b>${esc(c.in)}</b> for ${esc(c.out)} <span class="muted">(${esc(c.why === 'Doubtful' && c.chance != null ? `${c.chance}% chance` : c.why.toLowerCase())}${c.detail ? `: ${esc(c.detail)}` : ''})</span></li>`).join('')}</ul>` : ''}
+${P.out.length ? `<h3 class="h3">Missing or doubtful</h3><ul class="opp-list">${P.out.map((o) => `<li>${esc(o.name)} <span class="muted">${esc(o.why === 'Doubtful' && o.chance != null ? `${o.chance}% chance` : o.why)}${o.detail ? `, ${esc(o.detail)}` : ''}</span></li>`).join('')}</ul>` : '<p class="fine">No injuries or suspensions reported.</p>'}
 <p class="fine">A best guess from their last team sheet. Real line-ups come out an hour before kick-off.</p>
 </aside>`;
 }
@@ -62,7 +62,7 @@ export function lineupPage(ctx) {
 <div class="wrap xi-wrap" data-lineup>
 <noscript><p class="stats-empty">The line-up picker needs JavaScript switched on.</p></noscript>
 <div class="xi-pitch-col">
-<div class="pitch" id="xi-pitch" aria-label="Your ${esc(team)} line-up"><div class="pitch-lines" aria-hidden="true"><span class="pl-half"></span><span class="pl-circle"></span><span class="pl-box"></span><span class="pl-six"></span><span class="pl-box pl-top"></span><span class="pl-six pl-top"></span></div><ol class="spots" id="xi-spots"></ol></div>
+<div class="pitch" id="xi-pitch" aria-label="Your ${esc(team)} line-up">${PITCH_LINES}<ol class="spots" id="xi-spots"></ol></div>
 </div>
 <div class="xi-side">
 <fieldset class="formations"><legend>Formation</legend><div class="chips" id="xi-formations"></div></fieldset>

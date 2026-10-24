@@ -159,6 +159,30 @@ const afFixtures = { errors: [], response: [
 const afInjury = { 5551: { errors: [], response: [{ player: { name: 'D. Szoboszlai', type: 'Missing Fixture', reason: 'Hamstring Injury' }, team: { id: 40, name: 'Liverpool' } }, { player: { name: 'Kaoru Mitoma', type: 'Questionable', reason: 'Ankle Injury' }, team: { id: 51, name: 'Brighton' } }] },
   5552: { errors: [], response: [{ player: { name: 'Kylian Mbappe', type: 'Missing Fixture', reason: 'Suspended' }, team: { id: 541, name: 'Real Madrid' } }] } };
 
+// ---- Fantasy Premier League (team news for Premier League clubs) -------------------------------
+// Differs from ESPN on purpose: Welbeck is fit again here, Mitoma is 25%, Leoni (not in ESPN's squad) is out,
+// Alisson goes by his full name, Chiesa has gone on loan (left out), Endo is banned (Premier League only).
+const FPL_TEAMS = ['Arsenal', 'Aston Villa', 'Bournemouth', 'Brentford', 'Brighton', 'Chelsea', 'Coventry City', 'Crystal Palace', 'Everton', 'Fulham', 'Hull City', 'Ipswich Town', 'Leeds', 'Liverpool', 'Man City', 'Man Utd', 'Newcastle', "Nott'm Forest", 'Spurs', 'Sunderland'];
+const fp = (id, team, first, second, web, status, news = '', chance = null, added = '2026-10-22T10:00:00Z') => ({ id, team, first_name: first, second_name: second, web_name: web, status, news, chance_of_playing_next_round: chance, news_added: news ? added : null, now_cost: 50 });
+export const FPL = {
+  events: [], teams: FPL_TEAMS.map((name, i) => ({ id: i + 1, name, short_name: name.slice(0, 3).toUpperCase() })),
+  elements: [
+    fp(1, 1, 'Bukayo', 'Saka', 'Saka', 'i', 'Thigh injury - Unknown return date'),
+    fp(2, 14, 'Dominik', 'Szoboszlai', 'Szoboszlai', 'i', 'Hamstring injury - Expected back 08 Nov', 0, '2026-10-23T09:30:00Z'),
+    fp(3, 14, 'Giovanni', 'Leoni', 'Leoni', 'i', 'Knee injury - Expected back 02 Jan', 0, '2026-10-15T12:00:00Z'),
+    fp(4, 14, 'Víctor', 'Muñoz', 'Muñoz', 'd', 'Knee injury - 50% chance of playing', 50, '2026-10-23T16:00:00Z'),
+    fp(5, 14, 'Alisson', 'Ramses Becker', 'Alisson', 'd', 'Hip injury - 75% chance of playing', 75),
+    fp(6, 14, 'Federico', 'Chiesa', 'Chiesa', 'u', 'Has joined Juventus on loan for the rest of the season'),
+    fp(7, 14, 'Wataru', 'Endo', 'Endo', 's', 'Suspended until 01 Nov'),
+    fp(8, 14, 'Mohamed', 'Salah', 'M.Salah', 'a'),
+    fp(9, 5, 'Solly', 'March', 'March', 'i', 'Knee injury - Unknown return date'),
+    fp(10, 5, 'Kaoru', 'Mitoma', 'Mitoma', 'd', 'Ankle injury - 25% chance of playing', 25),
+    fp(11, 5, 'Jason', 'Steele', 'Steele', 'd', 'Illness - 50% chance of playing', 50),
+    fp(12, 5, 'Danny', 'Welbeck', 'Welbeck', 'a', 'Returned to training', 100),
+  ],
+};
+export const fplState = { mode: 'ok' }; // 'ok' | 'updating' | 'down'
+
 // ---- the pretend internet --------------------------------------------------------------------
 export const calls = [];
 export function statsFetch({ failFd = false, failAf = false, afRemaining = 90 } = {}) {
@@ -223,6 +247,11 @@ export function statsFetch({ failFd = false, failAf = false, afRemaining = 90 } 
       const id = +(u.pathname.match(/(\d+)\.png$/) || [])[1];
       if (!Object.values(FOTMOB).includes(id)) return new Response('no', { status: 404 });
       return new Response(new Uint8Array(BLANK_FOTMOB.has(id) ? 900 : 4000), { headers: { 'content-type': 'image/png' } });
+    }
+    if (u.host === 'fantasy.premierleague.com' && u.pathname === '/api/bootstrap-static/') {
+      if (fplState.mode === 'updating') return new Response('The game is being updated.', { status: 503, headers: { 'content-type': 'text/html' } });
+      if (fplState.mode === 'down') return new Response('nope', { status: 500 });
+      return J(FPL);
     }
     if (u.host === 'www.thesportsdb.com') return J({ player: null });
     if (u.host === 'en.wikipedia.org') {
