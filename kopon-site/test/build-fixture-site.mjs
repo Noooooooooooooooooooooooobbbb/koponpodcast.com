@@ -1,11 +1,14 @@
 // Builds the site from the test fixtures (no network) for browser testing.
 //   node test/build-fixture-site.mjs [--port 8899] [--out dir] [--feed podcast.xml] [--comments hyvor|remark42|none] [--no-news]
+//     [--no-stats] [--stats-no-keys] [--stats-down] [--stats-cache file]
 import { readFile, writeFile, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from '../scripts/build.mjs';
 import config from '../site.config.mjs';
+import { parseEditsFile } from '../lib/editor.mjs';
+import { statsFetch } from './fixtures/stats-fixtures.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -25,7 +28,11 @@ await writeFile(feedFile, xml);
 const newsMap = {};
 for (const s of config.news.sources) newsMap[typeof s.urls[0] === 'string' ? s.urls[0] : s.urls[0].url] = join(here, 'fixtures/news', `${s.id}.xml`);
 const liveStatus = opt('--live-status', null);
-const fixtureFetch = async (url) => {
+const statsCache = opt('--stats-cache', null);
+const sports = statsFetch({});
+const fixtureFetch = async (url, init) => {
+  if (/^https:\/\/(site\.api\.espn\.com|api\.football-data\.org|v3\.football\.api-sports\.io|www\.fotmob\.com|images\.fotmob\.com|www\.thesportsdb\.com|en\.wikipedia\.org)\//.test(url)) return args.includes('--stats-down') ? new Response('down', { status: 503 }) : sports(url, init);
+  if (url.includes('/stats-cache.json')) return statsCache ? new Response(await readFile(statsCache, 'utf8')) : new Response('nope', { status: 404 });
   if (url.includes('youtube.com/feeds/')) return args.includes('--no-shorts') ? new Response('blocked', { status: 403 }) : new Response(await readFile(join(here, 'fixtures/youtube-shorts.xml'), 'utf8'));
   if (url.includes('/site-status.json')) return liveStatus ? new Response(await readFile(liveStatus, 'utf8')) : new Response('nope', { status: 404 });
   const f = newsMap[url];
@@ -35,9 +42,13 @@ const fixtureFetch = async (url) => {
 
 const env = { KOPON_FEED_FILE: feedFile };
 if (args.includes('--no-news')) env.KOPON_SKIP_NEWS = '1';
+if (args.includes('--no-stats')) env.KOPON_SKIP_STATS = '1';
+if (!args.includes('--stats-no-keys')) { env.FOOTBALL_DATA_KEY = 'fd-test-key'; env.API_FOOTBALL_KEY = 'af-test-key'; }
 if (comments === 'hyvor') env.HYVOR_WEBSITE_ID = '12345';
 if (comments === 'disqus') env.DISQUS_SHORTNAME = 'kopontest';
 if (comments === 'cusdis') env.CUSDIS_APP_ID = 'abc-123';
 if (comments === 'remark42') { env.REMARK42_HOST = 'https://comments.example.com/'; env.REMARK42_SITE_ID = 'kopon'; }
 
-await build({ env, fetch: fixtureFetch, outDir: out, now: '2026-10-23T12:00:00Z' });
+const editsFile = opt('--top-edits', null);
+const topEdits = editsFile ? parseEditsFile(await readFile(editsFile, 'utf8')) : undefined;
+await build({ env, fetch: fixtureFetch, outDir: out, now: '2026-10-23T12:00:00Z', topEdits });

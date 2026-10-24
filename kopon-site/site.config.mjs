@@ -64,8 +64,12 @@ export default {
   // Each source tries its URLs in order until one works. `keywords` keeps
   // only matching headlines (useful for general sports feeds).
   news: {
+    // Listed in order of trust: when several sites cover the same story, the
+    // headline and summary come from the highest one in this list.
     sources: [
-      { id: 'this-is-anfield', name: 'This Is Anfield', homepage: 'https://www.thisisanfield.com/', urls: ['https://www.thisisanfield.com/feed/'] },
+      { id: 'bbc', name: 'BBC Sport', homepage: 'https://www.bbc.co.uk/sport/football/teams/liverpool', urls: ['https://feeds.bbci.co.uk/sport/football/teams/liverpool/rss.xml'] },
+      { id: 'guardian', name: 'The Guardian', homepage: 'https://www.theguardian.com/football/liverpool', urls: ['https://www.theguardian.com/football/liverpool/rss'] },
+      { id: 'athletic', name: 'The Athletic', homepage: 'https://www.nytimes.com/athletic/football/liverpool/', urls: ['https://www.nytimes.com/athletic/rss/football/liverpool/'] },
       {
         id: 'liverpool-echo', name: 'Liverpool Echo', homepage: 'https://www.liverpoolecho.co.uk/all-about/liverpool-fc',
         urls: [
@@ -74,13 +78,23 @@ export default {
           { url: 'https://www.liverpoolecho.co.uk/sport/football/?service=rss', keywords: ['liverpool', 'lfc', 'anfield', 'reds', 'iraola'] },
         ],
       },
-      { id: 'empire-of-the-kop', name: 'Empire of the Kop', homepage: 'https://www.empireofthekop.com/', urls: ['https://www.empireofthekop.com/feed/'] },
-      { id: 'the-anfield-wrap', name: 'The Anfield Wrap', homepage: 'https://www.theanfieldwrap.com/', urls: ['https://www.theanfieldwrap.com/feed/'] },
+      { id: 'this-is-anfield', name: 'This Is Anfield', homepage: 'https://www.thisisanfield.com/', urls: ['https://www.thisisanfield.com/feed/'] },
+      { id: 'liverpool-offside', name: 'The Liverpool Offside', homepage: 'https://www.theliverpooloffside.com/', urls: ['https://www.theliverpooloffside.com/rss/index.xml'] },
       { id: 'anfield-online', name: 'Anfield Online', homepage: 'https://www.anfield-online.co.uk/', urls: ['https://www.anfield-online.co.uk/feed/'] },
+      { id: 'the-anfield-wrap', name: 'The Anfield Wrap', homepage: 'https://www.theanfieldwrap.com/', urls: ['https://www.theanfieldwrap.com/feed/'] },
+      { id: 'football365', name: 'Football365', homepage: 'https://www.football365.com/liverpool', urls: ['https://www.football365.com/liverpool/rss2'] },
+      { id: 'anfield-index', name: 'Anfield Index', homepage: 'https://anfieldindex.com/', urls: ['https://anfieldindex.com/feed'] },
+      { id: 'sport-witness', name: 'Sport Witness', homepage: 'https://www.sportwitness.co.uk/category/premier-league/liverpool/', urls: ['https://www.sportwitness.co.uk/category/premier-league/liverpool/feed/'] },
+      { id: 'liverpool-world', name: 'Liverpool World', homepage: 'https://www.liverpoolworld.uk/sport/football/liverpool', urls: ['https://www.liverpoolworld.uk/sport/football/liverpool/rss'] },
+      { id: 'empire-of-the-kop', name: 'Empire of the Kop', homepage: 'https://www.empireofthekop.com/', urls: ['https://www.empireofthekop.com/feed/'] },
       // The official LFC feed was already failing on the old WordPress page.
       // Uncomment to try it again:
       // { id: 'liverpoolfc', name: 'Liverpool FC', homepage: 'https://www.liverpoolfc.com/news', urls: ['https://www.liverpoolfc.com/news/rss.xml'] },
     ],
+    topCount: 5, // stories in the "Top stories" box
+    hideClickbait: true, // leave obvious clickbait out of the news lists
+    // Extra words/phrases that mark a headline as clickbait, e.g. 'transfer gossip'
+    extraClickbait: [],
     perSource: 12, // newest headlines kept per site
     max: 60, // headlines on the News page
     maxAgeDays: 30, // ignore anything older than this
@@ -94,4 +108,34 @@ export default {
   // How often the site rebuilds even without a new episode (keeps the
   // built-in headlines fresh for search engines). 0 = never.
   refreshHours: 24,
+
+  // The Stats page. Fixtures, results and team numbers come from ESPN (free,
+  // no key). Add these in Netlify's environment variables for more:
+  //   FOOTBALL_DATA_KEY – official Premier League & Champions League tables, top scorers
+  //   API_FOOTBALL_KEY  – player stats and injury lists (free plan: 100 requests a day)
+  // Never put the keys themselves in this file: it's public on GitHub.
+  stats: {
+    enabled: true,
+    teamName: 'Liverpool',
+    espnTeamId: '364',     // Liverpool on ESPN
+    apiFootballTeamId: 40, // Liverpool on API-Football
+    nextCount: 5,          // upcoming matches, each with a preview page
+    resultsCount: 8,       // latest results shown
+  },
+
+  // ── Fan zone: "Pick your XI" and player ratings (/fans/) ──────────────────
+  // Fans' picks are kept in Netlify Blobs (built into Netlify). Your official
+  // ratings use the same password as the top-stories editor (EDITOR_PASSWORD).
+  fans: {
+    enabled: true,
+    ratingsMatches: 5,  // how many recent matches can be rated
+    ratingsOpenDays: 7, // how long after a match fans can rate it
+    photos: true,       // look up player photos automatically (false = initials only)
+  },
+
+  // Your own player photos win over the automatic ones. Either put a picture in
+  // the kopon-site/photos/ folder named after the player (virgil-van-dijk.jpg),
+  // or add a web address here:
+  //   'Virgil van Dijk': 'https://example.com/vvd.png',
+  playerPhotos: {},
 };

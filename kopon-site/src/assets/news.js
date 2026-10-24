@@ -1,12 +1,13 @@
 // Live LFC news: shows the headlines baked into the page straight away,
 // then quietly swaps in fresh ones from /api/news.
-import { renderWireList, renderNewsGrid, renderNewsPage, pickDiverse, initials, esc } from './news-render.js';
+import { renderWireList, renderNewsGrid, renderNewsPage, renderTopStories, pickDiverse, initials, esc } from './news-render.js';
 
 const root = document.querySelector('[data-news]');
 if (root) {
   const mode = root.getAttribute('data-news'); // "wire" (home) or "page"
   const target = root.querySelector('[data-news-body]');
   const updatedEl = root.querySelector('[data-news-updated]');
+  const topEl = root.querySelector('[data-top-body]');
   let data = null;
   let active = '';
 
@@ -47,6 +48,7 @@ if (root) {
     } else {
       target.innerHTML = renderNewsPage(data, { now, relative: true, active });
     }
+    if (topEl) topEl.innerHTML = renderTopStories(data.top || [], { now, relative: true });
     if (updatedEl && data.updated) updatedEl.textContent = fmtUpdated(data.updated);
     hideBrokenImages();
   };

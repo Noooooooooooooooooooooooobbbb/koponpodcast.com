@@ -4,6 +4,8 @@
 //   HYVOR_WEBSITE_ID / REMARK42_HOST / REMARK42_SITE_ID  – switch on comments
 //   KOPON_FEED_FILE   – build from a local feed file instead of the live feed
 //   KOPON_SKIP_NEWS=1 – don't fetch news at build time
+//   KOPON_SKIP_STATS=1 – don't fetch stats at build time
+//   FOOTBALL_DATA_KEY / API_FOOTBALL_KEY – extra stats (see site.config.mjs)
 import { mkdir, rm, readFile, writeFile, readdir, copyFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
@@ -11,9 +13,14 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import siteConfig from '../site.config.mjs';
 import { parsePodcastFeed } from '../lib/feed.mjs';
 import { fetchAllNews } from '../lib/news.mjs';
+import topEdits from '../content/top-stories.mjs';
 import { shortsFeedUrl, parseShortsFeed, mergeShorts, assignShorts } from '../lib/shorts.mjs';
 import { esc, slugify } from '../lib/text.mjs';
+import { newsOptions } from '../lib/news.mjs';
 import * as T from '../src/templates.mjs';
+import { statsPage, previewPage } from '../src/stats-templates.mjs';
+import { fansHub, lineupPage, ratingsPage, fansJson, ratePath } from '../src/fans-templates.mjs';
+import { buildStats } from '../lib/stats/index.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -62,10 +69,10 @@ async function buildAssets(outDir, config) {
     await writeFile(join(outDir, 'assets', name), buf);
     assets[name] = `/assets/${name}?v=${hash(buf)}`;
   }
-  // news-render.js first, because news.js imports it
-  for (const name of ['site.css', 'player.js', 'search.js', 'comments.js', 'news-render.js', 'news.js']) {
+  // modules before the files that import them (their addresses carry a version)
+  for (const name of ['site.css', 'player.js', 'search.js', 'comments.js', 'editor.js', 'stats.js', 'news-render.js', 'news.js', 'fans-core.js', 'fans-ui.js', 'lineup.js', 'ratings.js']) {
     let text = await readFile(join(srcDir, name), 'utf8');
-    if (name === 'news.js') text = text.replace("from './news-render.js'", `from '${assets['news-render.js']}'`);
+    text = text.replace(/from '\.\/([\w-]+\.js)'/g, (m, dep) => (assets[dep] ? `from '${assets[dep]}'` : m));
     await writeFile(join(outDir, 'assets', name), text);
     assets[name] = `/assets/${name}?v=${hash(text)}`;
   }
@@ -80,6 +87,28 @@ async function buildAssets(outDir, config) {
   await writeFile(join(outDir, 'assets', 'site.webmanifest'), manifest);
   assets['site.webmanifest'] = `/assets/site.webmanifest?v=${hash(manifest)}`;
   return assets;
+}
+
+// Your own player photos: files in kopon-site/photos/ (named after the player,
+// e.g. virgil-van-dijk.jpg) and addresses listed in site.config.mjs (playerPhotos)
+async function copyOwnPhotos(outDir, config, log) {
+  const own = {};
+  for (const [name, url] of Object.entries(config.playerPhotos || {})) if (/^https:\/\/\S+$/.test(String(url))) own[slugify(name)] = String(url);
+  let files = [];
+  try { files = await readdir(join(ROOT, 'photos')); } catch { return own; }
+  const pics = files.filter((f) => /\.(jpe?g|png|webp)$/i.test(f));
+  if (!pics.length) return own;
+  await mkdir(join(outDir, 'photos'), { recursive: true });
+  for (const f of pics) {
+    const buf = await readFile(join(ROOT, 'photos', f));
+    if (buf.length > 2 * 1024 * 1024) { log(`  photos: ${f} is over 2 MB, skipped (please make it smaller)`); continue; }
+    const slug = slugify(f.replace(/\.[^.]+$/, ''));
+    const out = `${slug}${f.slice(f.lastIndexOf('.')).toLowerCase()}`;
+    await writeFile(join(outDir, 'photos', out), buf);
+    own[slug] = `/photos/${out}?v=${hash(buf)}`;
+  }
+  log(`  photos: ${Object.keys(own).length} of your own player photos`);
+  return own;
 }
 
 // Tidy up common slips in site.config.mjs (trailing slash, spaces in room names)
@@ -111,6 +140,63 @@ function publishedSlugs(live) {
   const clean = {};
   for (const [guid, slug] of Object.entries(slugs)) if (/^[a-z0-9-]{1,200}$/.test(slug)) clean[guid] = slug;
   return clean;
+}
+
+// Stats. The previous build's remembered match data comes from the live site
+// (stats-cache.json) so each build only fetches what's new. If everything
+// fails, the last good numbers are kept.
+async function loadStats(config, live, fetchImpl, env, now, log, ownPhotos = {}) {
+  if (config.stats?.enabled === false) return { data: null, file: null };
+  // Read the remembered data even if site-status.json couldn't be read: losing it means re-fetching everything
+  let prev = null;
+  try {
+    const res = await fetchImpl(`${config.siteUrl}/stats-cache.json?t=${now.getTime()}`, { signal: AbortSignal.timeout(15000) });
+    if (res.ok) { const j = await res.json(); if (j && typeof j === 'object' && j.v === 1) prev = j; }
+  } catch { /* first build with stats, or the site is down */ }
+  const cache = prev?.cache && typeof prev.cache === 'object' ? prev.cache : {};
+  const save = (good) => JSON.stringify({ v: 1, savedAt: now.toISOString(), cache, data: good || null });
+  if (env.KOPON_SKIP_STATS) return { data: null, file: prev ? save(prev.data) : null };
+
+  let data = null;
+  // After 4 minutes, outstanding requests are cancelled and whatever arrived is used
+  const stop = new AbortController();
+  const timer = setTimeout(() => { log('  stats: taking too long, using what has arrived so far'); stop.abort(); }, 240000);
+  try {
+    let hard;
+    const limit = new Promise((_, rej) => { hard = setTimeout(() => rej(new Error('still running after 5 minutes')), 300000); });
+    const r = await Promise.race([buildStats({ fetchImpl, env, config, now, cache, log, signal: stop.signal, ownPhotos }), limit]).finally(() => clearTimeout(hard));
+    data = r.data;
+    for (const s of data.sources) log(`  stats: ${s.name.padEnd(36)} ${s.ok ? 'ok' : 'FAILED'}${s.detail ? ` (${s.detail})` : ''}`);
+    if (data.afUsage) log(`  stats: API-Football requests this build ${data.afUsage.used}, left today ${data.afUsage.remaining ?? '?'}`);
+  } catch (err) {
+    log(`  stats failed: ${err.message}`);
+  } finally {
+    clearTimeout(timer);
+    stop.abort(); // nothing left running in the background
+  }
+  // Nothing at all came back (e.g. ESPN down): show the last good numbers instead
+  const empty = !data || (!data.next.length && !data.results.length);
+  const good = empty ? prev?.data || null : data;
+  if (empty && prev?.data) {
+    log('  stats: using the last good numbers from the live site');
+    data = { ...prev.data, stale: true };
+  } else if (empty) {
+    data = null; // nothing to show: the page says the stats will be back soon
+  }
+  // The fan zone couldn't be worked out this time: keep the last one
+  if (data && !data.fans && prev?.data?.fans) data.fans = prev.data.fans;
+  if (data?.fans) {
+    const F = data.fans;
+    // a line-up for a match that has already been played can't be picked any more
+    if (F.lineup && Date.parse(F.lineup.kickoff) < now.getTime() - 3 * 3600000) F.lineup = null;
+    F.rate = (F.rate || []).filter((m) => Date.parse(m.closes) > now.getTime() - 60 * 86400000);
+  }
+  // Matches already played drop out of "next"
+  if (data) {
+    data.next = (data.next || []).filter((m) => Date.parse(m.date) > now.getTime() - 3 * 3600000);
+    data.previews = (data.previews || []).filter((m) => data.next.some((n) => n.slug === m.slug));
+  }
+  return { data, file: save(good) };
 }
 
 async function loadShorts(config, live, fetchImpl, env, log) {
@@ -158,10 +244,10 @@ export async function build(options = {}) {
   log(`  ${episodes.length} episodes (latest: ${episodes[0].title})`);
 
   // 2. News (never fatal: the live /api/news keeps it fresh anyway)
-  let news = { updated: builtAt.toISOString(), sources: config.news.sources.map((s) => ({ id: s.id, name: s.name, homepage: s.homepage, ok: false, count: 0, errors: [] })), items: [] };
+  let news = { top: [], updated: builtAt.toISOString(), sources: config.news.sources.map((s) => ({ id: s.id, name: s.name, homepage: s.homepage, ok: false, count: 0, errors: [] })), items: [] };
   if (!env.KOPON_SKIP_NEWS) {
     try {
-      news = await fetchAllNews(config.news.sources, { fetch: fetchImpl, perSource: config.news.perSource, max: config.news.max, maxAgeDays: config.news.maxAgeDays, now: builtAt });
+      news = await fetchAllNews(config.news.sources, newsOptions(config, { fetch: fetchImpl, now: builtAt, edits: options.topEdits || topEdits }));
       for (const s of news.sources) log(`  news: ${s.name.padEnd(20)} ${s.ok ? `${s.count} headlines` : `FAILED (${s.errors.join('; ')})`}`);
     } catch (err) {
       console.warn(`  news fetch failed: ${err.message}`);
@@ -185,7 +271,9 @@ export async function build(options = {}) {
   });
   for (const ep of episodes) ep.shorts = shortsBySlug.get(ep.slug) || [];
 
-  const ctx = { config, show, episodes, news, assets, comments, builtAt };
+  const ownPhotos = await copyOwnPhotos(outDir, config, log);
+  const stats = await loadStats(config, live, fetchImpl, env, builtAt, log, ownPhotos);
+  const ctx = { config, show, episodes, news, assets, comments, builtAt, stats: stats.data };
 
   await writeOut(outDir, 'index.html', T.homePage(ctx));
   await writeOut(outDir, 'episodes/index.html', T.episodesPage(ctx));
@@ -193,24 +281,54 @@ export async function build(options = {}) {
   await writeOut(outDir, 'news/index.html', T.newsPage(ctx));
   await writeOut(outDir, 'community/index.html', T.communityPage(ctx));
   for (const room of config.rooms) await writeOut(outDir, `community/${room.slug}/index.html`, T.roomPage(ctx, room));
+  // A surprise in the stats data must never stop the podcast site from publishing
+  let previews = [];
+  try {
+    const pages = [['stats/index.html', statsPage(ctx)]];
+    for (const p of stats.data?.previews || []) pages.push([`stats/${p.slug}/index.html`, previewPage(ctx, p)]);
+    for (const [path, html] of pages) await writeOut(outDir, path, html);
+    previews = stats.data?.previews || [];
+  } catch (err) {
+    console.warn(`  stats pages failed (${err.message}); publishing a placeholder`);
+    await writeOut(outDir, 'stats/index.html', statsPage({ ...ctx, stats: null }));
+  }
+  if (stats.file) await writeOut(outDir, 'stats-cache.json', stats.file);
+  // The fan zone (line-up picker and player ratings)
+  let ratePages = [];
+  try {
+    await writeOut(outDir, 'fans/index.html', fansHub(ctx));
+    await writeOut(outDir, 'fans/lineup/index.html', lineupPage(ctx));
+    for (const m of stats.data?.fans?.rate || []) { await writeOut(outDir, `fans/ratings/${m.slug}/index.html`, ratingsPage(ctx, m)); ratePages.push(ratePath(m)); }
+    await writeOut(outDir, 'data/fans.json', fansJson(ctx));
+  } catch (err) {
+    console.warn(`  fan zone pages failed (${err.message}); publishing placeholders`);
+    const plain = { ...ctx, stats: ctx.stats ? { ...ctx.stats, fans: null } : null };
+    await writeOut(outDir, 'fans/index.html', fansHub(plain));
+    await writeOut(outDir, 'fans/lineup/index.html', lineupPage(plain));
+    await writeOut(outDir, 'data/fans.json', fansJson(plain));
+    ratePages = [];
+  }
   await writeOut(outDir, '404.html', T.notFoundPage(ctx));
+  await writeOut(outDir, 'editor/index.html', T.editorPage(ctx));
 
   // Static files (favicon.ico, IndexNow key, …)
   for (const name of await readdir(join(ROOT, 'src/static'))) await copyFile(join(ROOT, 'src/static', name), join(outDir, name));
 
   const today = builtAt.toISOString().slice(0, 10);
   const urls = [
-    ['/', episodes[0].dateIso], ['/episodes/', episodes[0].dateIso], ['/news/', today], ['/community/', today],
+    ['/', episodes[0].dateIso], ['/episodes/', episodes[0].dateIso], ['/news/', today], ['/stats/', today], ['/community/', today],
+    ...previews.map((p) => [`/stats/${p.slug}/`, today]),
+    ['/fans/', today], ['/fans/lineup/', today], ...ratePages.map((p) => [p, today]),
     ...config.rooms.map((r) => [`/community/${r.slug}/`, today]),
     ...episodes.map((ep) => [`/episodes/${ep.slug}/`, ep.dateIso]),
   ];
   await writeOut(outDir, 'sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(([u, d]) => `  <url><loc>${esc(config.siteUrl + u)}</loc><lastmod>${d}</lastmod></url>`).join('\n')}\n</urlset>\n`);
-  await writeOut(outDir, 'robots.txt', `User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: ${config.siteUrl}/sitemap.xml\n`);
+  await writeOut(outDir, 'robots.txt', `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /editor/\nDisallow: /stats-cache.json\n\nSitemap: ${config.siteUrl}/sitemap.xml\n`);
   // Read by the scheduled checker to decide whether a rebuild is needed
-  await writeOut(outDir, 'site-status.json', JSON.stringify({ builtAt: builtAt.toISOString(), signature, count: episodes.length, latestGuid: episodes[0].guid, latestTitle: episodes[0].title, slugs: Object.fromEntries(episodes.map((e) => [e.guid, e.slug])), shortsFeedIds: shorts.feedIds, shorts: shorts.all }, null, 2));
+  await writeOut(outDir, 'site-status.json', JSON.stringify({ builtAt: builtAt.toISOString(), signature, count: episodes.length, latestGuid: episodes[0].guid, latestTitle: episodes[0].title, slugs: Object.fromEntries(episodes.map((e) => [e.guid, e.slug])), shortsFeedIds: shorts.feedIds, shorts: shorts.all, nextKickoff: stats.data && !stats.data.stale ? stats.data.nextKickoff || null : null, inPlay: stats.data && !stats.data.stale ? stats.data.inPlay || null : null }, null, 2));
 
-  log(`  wrote ${episodes.length + 6 + config.rooms.length} pages to ${outDir}`);
-  return { episodes, news, outDir, assets };
+  log(`  wrote ${episodes.length + 9 + config.rooms.length + previews.length + ratePages.length} pages to ${outDir}`);
+  return { episodes, news, outDir, assets, stats: stats.data };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {

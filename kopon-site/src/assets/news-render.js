@@ -78,6 +78,21 @@ function newsCard(it, opts, cls = '') {
   }<span class="news-body"><span class="news-meta"><span class="news-src">${esc(it.source)}</span> · <time datetime="${esc(it.date || '')}">${esc(timeLabel(it.date, opts.now, opts.relative))}</time></span><span class="news-title">${esc(it.title)}</span></span></a></article>`;
 }
 
+// "Top stories": the main stories right now, each with a short summary
+export function renderTopStories(top, opts = {}) {
+  if (!top || !top.length) return '';
+  const item = (s, i) => {
+    const link = safeUrl(s.url);
+    const head = link ? `<a ${linkAttrs(link)}>${esc(s.headline)}</a>` : esc(s.headline);
+    const srcs = (s.sources || []).filter((x) => safeUrl(x.url));
+    const shown = srcs.slice(0, 3).map((x) => `<a ${linkAttrs(x.url)}>${esc(x.name)}</a>`).join('<span aria-hidden="true"> · </span>');
+    const more = s.count > 3 ? `<span class="top-more"> +${s.count - 3} more</span>` : '';
+    const meta = s.pinned ? '<span class="top-pin">Kop On! pick</span>' : `${s.count > 1 ? `<span class="top-count">${s.count} sites</span>` : ''}${s.date ? `<time datetime="${esc(s.date)}">${esc(timeLabel(s.date, opts.now, opts.relative))}</time>` : ''}`;
+    return `<li class="top-item"><span class="top-num" aria-hidden="true">${i + 1}</span><div class="top-text"><h3 class="top-headline">${head}</h3>${s.summary ? `<p class="top-summary">${esc(s.summary)}</p>` : ''}<p class="top-meta">${meta}${shown ? `<span class="top-sources">${shown}${more}</span>` : ''}</p></div></li>`;
+  };
+  return `<section class="top-stories" aria-labelledby="top-h"><div class="section-head"><h2 id="top-h">Top stories</h2></div><p class="wire-note">The main Liverpool stories right now, summarised from across the news sites. No clickbait.</p><ol class="top-list">${top.map(item).join('')}</ol></section>`;
+}
+
 // Home page: a full-width grid of picture cards
 export function renderNewsGrid(items, opts = {}) {
   if (!items.length) return `<p class="news-empty">Headlines are taking a breather. Check back soon.</p>`;

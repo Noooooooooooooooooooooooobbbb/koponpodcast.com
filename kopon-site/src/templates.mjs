@@ -1,6 +1,7 @@
 // HTML templates for every page. Everything from the feed is escaped with esc().
 import { esc, jsonForScript, clock } from '../lib/text.mjs';
-import { renderNewsGrid, renderNewsPage, pickDiverse } from './assets/news-render.js';
+import { renderNewsGrid, renderNewsPage, renderTopStories, pickDiverse } from './assets/news-render.js';
+import { fansBand } from './fans-templates.mjs';
 
 // ---- icons --------------------------------------------------------------------
 const I = {
@@ -111,13 +112,17 @@ function layoutInner(ctx, page, content) {
   const title = page.title ? `${page.title} | ${config.shortTitle}` : config.title;
   const desc = page.description || config.description;
   const img = page.image || `${config.siteUrl}${assets['og-card.jpg']}`;
-  const nav = [['Episodes', '/episodes/'], ['News', '/news/'], ['Community', '/community/']];
+  const nav = [['Episodes', '/episodes/'], ['News', '/news/'], ['Stats', '/stats/'], ['Fan zone', '/fans/'], ['Community', '/community/']];
   const jsonLd = (page.jsonLd || []).map((j) => `<script type="application/ld+json">${jsonForScript(j)}</script>`).join('\n');
   const scripts = [
     `<script src="${assets['player.js']}" defer></script>`,
     page.search ? `<script src="${assets['search.js']}" defer></script>` : '',
+    page.editor ? `<script src="${assets['editor.js']}" defer></script>` : '',
     content.includes('data-disqus=') ? `<script src="${assets['comments.js']}" defer></script>` : '',
     page.news ? `<script type="module" src="${assets['news.js']}"></script>` : '',
+    page.stats ? `<script src="${assets['stats.js']}" defer></script>` : '',
+    page.fans === 'lineup' ? `<script type="module" src="${assets['lineup.js']}"></script>` : '',
+    page.fans === 'ratings' ? `<script type="module" src="${assets['ratings.js']}"></script>` : '',
   ].join('');
 
   return `<!doctype html>
@@ -221,7 +226,9 @@ ${latest.audio ? `${wave(latest, 48, `Seek within ${latest.title}`)}<div class="
 </div>
 </section>
 
+${fansBand(ctx)}
 <section class="wrap home-news" aria-labelledby="wire-h" data-news="grid">
+<div data-top-body>${renderTopStories(news.top || [], { now: ctx.builtAt.getTime(), relative: false })}</div>
 <div class="section-head"><h2 id="wire-h">Latest LFC news</h2><a href="/news/">All news →</a></div>
 <p class="wire-note">Latest LFC headlines from around the web, updated automatically.</p>
 <div data-news-body>${renderNewsGrid(homeNews, { now: ctx.builtAt.getTime(), relative: false })}</div>
@@ -311,12 +318,12 @@ ${player}
 <div class="wrap ep-body">
 <article class="notes-col" aria-labelledby="notes-h">
 ${shortsBlock(ep)}
-<h2 class="h2" id="notes-h">Show notes</h2>
-<div class="notes">${ep.notesHtml || '<p>No show notes for this one.</p>'}</div>
 <section class="discussion" id="comments" aria-labelledby="disc-h">
 <h2 class="h2" id="disc-h">Discussion</h2>
 ${commentsBlock(ctx.comments, { pageId: `episode-${ep.guid}`, url, title: ep.title })}
 </section>
+<h2 class="h2" id="notes-h">Show notes</h2>
+<div class="notes">${ep.notesHtml || '<p>No show notes for this one.</p>'}</div>
 </article>
 <aside class="side-col" aria-label="More episodes">
 ${pn ? `<div class="pn">${pn}</div>` : ''}
@@ -351,6 +358,8 @@ export function newsPage(ctx) {
 <p class="updated">Updated <span data-news-updated>${esc(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' }).format(new Date(news.updated)))}</span></p>
 </div>
 <div class="wrap">
+<div data-top-body>${renderTopStories(news.top || [], { now: ctx.builtAt.getTime(), relative: false })}</div>
+<h2 class="visually-hidden">All headlines</h2>
 <div data-news-body>${renderNewsPage(news, { now: ctx.builtAt.getTime(), relative: false })}</div>
 <p class="sources-note">Headlines link to the original publishers: ${config.news.sources.map((s) => `<a href="${esc(s.homepage)}" rel="noopener">${esc(s.name)}</a>`).join(', ')}.</p>
 </div>
@@ -392,6 +401,47 @@ ${commentsBlock(ctx.comments, { pageId: `room-${room.slug}`, url: config.siteUrl
 <p style="margin-top:40px"><a href="/community/">← All rooms</a></p>
 </div>`;
   return layout(ctx, { path, active: '/community/', title: `${room.name} · Forum`, description: room.description }, content);
+}
+
+export function editorPage(ctx) {
+  const content = `
+<div class="wrap page-head">
+<p class="crumbs"><a href="/">Home</a> / Editor</p>
+<h1 class="page-title">Top stories editor</h1>
+<p class="lede">Rewrite or hide the automatic top stories, or add your own. Changes appear on the site about 2 minutes after you save.</p>
+</div>
+<div class="wrap editor" id="editor">
+<p id="editor-status" class="editor-status" role="status" aria-live="polite"></p>
+<form id="editor-login" class="ed-login">
+<label class="ed-label" for="editor-password">Editor password</label>
+<input id="editor-password" class="ed-input" type="password" autocomplete="current-password" required>
+<button class="btn btn-primary" type="submit">Open the editor</button>
+</form>
+<div id="editor-main" hidden>
+<div class="ed-bar"><button id="editor-save" class="btn btn-primary" type="button">Save changes</button><button id="editor-logout" class="btn" type="button">Log out</button></div>
+<section aria-labelledby="ed-own-h">
+<h2 class="h2" id="ed-own-h">Your own stories</h2>
+<p class="ed-help">These go at the top of the box, above the automatic ones.</p>
+<ul id="editor-pinned" class="ed-list"></ul>
+<form id="editor-add" class="ed-card ed-add">
+<label class="ed-label">Headline<input class="ed-input" name="headline" maxlength="200" required></label>
+<label class="ed-label">Summary<textarea class="ed-input" name="summary" rows="3" maxlength="600"></textarea></label>
+<div class="ed-grid">
+<label class="ed-label">Link (optional)<input class="ed-input" name="url" type="url" placeholder="https://"></label>
+<label class="ed-label">Source name (optional)<input class="ed-input" name="source" maxlength="60" placeholder="e.g. BBC Sport"></label>
+<label class="ed-label">Keep it for<select class="ed-input" name="days"><option value="1">1 day</option><option value="2">2 days</option><option value="3" selected>3 days</option><option value="7">1 week</option><option value="14">2 weeks</option></select></label>
+</div>
+<button class="btn" type="submit">Add story</button>
+</form>
+</section>
+<section aria-labelledby="ed-auto-h" class="block">
+<h2 class="h2" id="ed-auto-h">Automatic top stories</h2>
+<p class="ed-help">The top 5 that aren't hidden appear on the site. Edit the wording, or tick "Hide" to drop a story.</p>
+<ul id="editor-auto" class="ed-list"></ul>
+</section>
+</div>
+</div>`;
+  return layout(ctx, { path: '/editor/', title: 'Editor', noindex: true, editor: true }, content);
 }
 
 export function notFoundPage(ctx) {

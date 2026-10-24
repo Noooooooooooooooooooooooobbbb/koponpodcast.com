@@ -28,13 +28,39 @@ if (flag('--fixtures')) {
   const { default: config } = await import(pathToFileURL(join(ROOT, 'site.config.mjs')).href);
   const map = {};
   for (const s of config.news.sources) map[(typeof s.urls[0] === 'string' ? s.urls[0] : s.urls[0].url)] = join(ROOT, 'test/fixtures/news', `${s.id}.xml`);
-  globalThis.fetch = async (url) => {
+  // A stand-in for GitHub's file API, so the editor can be tried offline
+  process.env.EDITOR_PASSWORD ??= 'kopon-test-password';
+  process.env.GITHUB_TOKEN ??= 'test-token';
+  process.env.GITHUB_REPO ??= 'owner/repo';
+  const ghFiles = new Map();
+  let ghSha = 0;
+  globalThis.__ghFiles = ghFiles;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    // this preview server itself (e.g. the fan zone reading /data/fans.json)
+    if (/^http:\/\/(127\.0\.0\.1|localhost)[:/]/.test(String(url))) return realFetch(url, init);
+    if (String(url).startsWith('https://api.github.com/repos/')) {
+      const key = String(url).split('?')[0];
+      if (!init.method || init.method === 'GET') {
+        const f = ghFiles.get(key);
+        return f ? new Response(JSON.stringify({ content: Buffer.from(f.text).toString('base64'), sha: f.sha })) : new Response('{}', { status: 404 });
+      }
+      const body = JSON.parse(init.body);
+      const cur = ghFiles.get(key);
+      if (cur && body.sha !== cur.sha) return new Response('{}', { status: 409 });
+      const sha = `sha${++ghSha}`;
+      ghFiles.set(key, { text: Buffer.from(body.content, 'base64').toString('utf8'), sha });
+      return new Response(JSON.stringify({ content: { sha } }));
+    }
     const file = map[url];
     if (!file) return new Response('not found', { status: 404 });
     try { return new Response(await readFile(file, 'utf8'), { status: 200 }); } catch { return new Response('not found', { status: 404 }); }
   };
 }
 const newsFn = (await import(pathToFileURL(join(ROOT, 'netlify/functions/news.mjs')).href)).default;
+const editorFn = (await import(pathToFileURL(join(ROOT, 'netlify/functions/editor.mjs')).href)).default;
+process.env.KOPON_STORE_DIR ||= join(ROOT, '.fans-store'); // votes go in a local folder, not Netlify
+const fansFn = (await import(pathToFileURL(join(ROOT, 'netlify/functions/fans.mjs')).href)).default;
 
 async function sendFile(req, res, file, status = 200) {
   const info = await stat(file);
@@ -65,6 +91,26 @@ const server = createServer(async (req, res) => {
       const r = await newsFn(new Request(url));
       res.writeHead(r.status, Object.fromEntries(r.headers));
       return res.end(await r.text());
+    }
+    if (url.pathname === '/api/editor') {
+      const chunks = [];
+      for await (const c of req) chunks.push(c);
+      const r = await editorFn(new Request(url, { method: req.method, headers: { 'Content-Type': 'application/json', 'x-forwarded-for': req.headers['x-forwarded-for'] || req.socket.remoteAddress || '' }, body: req.method === 'POST' ? Buffer.concat(chunks) : undefined }), null);
+      res.writeHead(r.status, Object.fromEntries(r.headers));
+      return res.end(await r.text());
+    }
+    if (url.pathname === '/api/fans') {
+      const chunks = [];
+      for await (const c of req) chunks.push(c);
+      const headers = { 'Content-Type': req.headers['content-type'] || '', 'x-forwarded-for': req.headers['x-forwarded-for'] || req.socket.remoteAddress || '', ...(req.headers.origin ? { origin: req.headers.origin } : {}) };
+      const r = await fansFn(new Request(url, { method: req.method, headers, body: req.method === 'POST' ? Buffer.concat(chunks) : undefined }), null);
+      res.writeHead(r.status, Object.fromEntries(r.headers));
+      return res.end(await r.text());
+    }
+    if (url.pathname === '/__now') { if (url.searchParams.get('t')) process.env.KOPON_NOW = url.searchParams.get('t'); else delete process.env.KOPON_NOW; res.writeHead(200); return res.end(process.env.KOPON_NOW || 'real'); }
+    if (url.pathname === '/__gh-file') {
+      const f = [...(globalThis.__ghFiles || new Map()).values()][0];
+      res.writeHead(200, { 'Content-Type': 'text/plain' }); return res.end(f ? f.text : '');
     }
     if (url.pathname === '/__api-mode') { apiMode = url.searchParams.get('m') || 'ok'; res.writeHead(200); return res.end(apiMode); }
     if (url.pathname.startsWith('/test-media/')) {

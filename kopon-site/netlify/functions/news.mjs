@@ -1,10 +1,10 @@
-// GET /api/news — fresh LFC headlines as JSON (cached at Netlify's edge).
-import { fetchAllNews } from '../../lib/news.mjs';
+// GET /api/news — fresh LFC headlines and top stories as JSON (cached at Netlify's edge).
+import { fetchAllNews, newsOptions } from '../../lib/news.mjs';
 import siteConfig from '../../site.config.mjs';
+import topEdits from '../../content/top-stories.mjs';
 
 export default async () => {
-  const n = siteConfig.news;
-  const data = await fetchAllNews(n.sources, { perSource: n.perSource, max: n.max, maxAgeDays: n.maxAgeDays });
+  const data = await fetchAllNews(siteConfig.news.sources, newsOptions(siteConfig, { edits: topEdits }));
   const ok = data.items.length > 0;
   return new Response(JSON.stringify(data), {
     status: 200,

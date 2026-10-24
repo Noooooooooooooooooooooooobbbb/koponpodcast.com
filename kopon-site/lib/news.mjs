@@ -5,6 +5,8 @@ import { parseXml, child, children, find, textOf, htmlOf, textChild } from './xm
 import { plainText, parseDate, safeUrl } from './text.mjs';
 import { sortByDate, pickDiverse } from '../src/assets/news-render.js';
 
+import { computeTopStories, applyTopEdits, isClickbait } from './topstories.mjs';
+
 export { sortByDate, pickDiverse };
 
 const UA = 'Mozilla/5.0 (compatible; KopOnNews/1.0; +https://kop-on-podcast.netlify.app/news/)';
@@ -74,6 +76,7 @@ export function parseNewsFeed(xml, source = {}) {
       source: source.name || '',
       sourceId: source.id || '',
       image: imageFrom(item),
+      summary: plainText(htmlOf(child(item, 'description')) || htmlOf(child(item, 'summary')) || htmlOf(child(item, 'media:group')?.children?.find?.((c) => c.name === 'media:description')) || '', 4000).slice(0, 600),
     });
   }
   return out;
@@ -135,6 +138,12 @@ async function loadSource(src, opts) {
   return { items: [], url: null, errors };
 }
 
+// The options used everywhere news is fetched (build, /api/news, editor)
+export function newsOptions(config, extra = {}) {
+  const n = config.news || {};
+  return { perSource: n.perSource, max: n.max, maxAgeDays: n.maxAgeDays, topCount: n.topCount ?? 5, hideClickbait: n.hideClickbait !== false, extraClickbait: n.extraClickbait || [], ...extra };
+}
+
 /**
  * @param {Array<{id:string,name:string,homepage?:string,urls:string[],keywords?:string[]}>} sources
  */
@@ -160,6 +169,14 @@ export async function fetchAllNews(sources, opts = {}) {
     all.push(...fresh);
     return { id: s.id, name: s.name, homepage: s.homepage || '', ok: r.items.length > 0, count: fresh.length, errors: r.errors };
   });
-  all = dedupe(sortByDate(all)).slice(0, o.max);
-  return { updated: o.now.toISOString(), sources: status, items: all };
+  all = dedupe(sortByDate(all));
+  // Top stories are worked out from everything (clickbait included, it shows what's being talked about)
+  const candidates = computeTopStories(all, { sourceOrder: sources.map((s) => s.id), now: o.now, extraClickbait: opts.extraClickbait || [], limit: 12 });
+  const top = applyTopEdits(candidates, opts.edits || {}, { now: o.now, limit: opts.topCount ?? 5 });
+  const list = (opts.hideClickbait === false ? all : all.filter((it) => !isClickbait(it.title, opts.extraClickbait || [])))
+    .slice(0, o.max)
+    .map(({ summary, ...rest }) => rest); // summaries are only needed for the top stories
+  const out = { updated: o.now.toISOString(), sources: status, top, items: list };
+  if (opts.includeCandidates) out.candidates = candidates;
+  return out;
 }

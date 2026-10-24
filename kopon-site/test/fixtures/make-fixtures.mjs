@@ -141,23 +141,23 @@ const wp = (site, entries) => `<?xml version="1.0" encoding="UTF-8"?><rss versio
 	<atom:link href="https://example.com/feed/" rel="self" type="application/rss+xml" />
 	<link>https://example.com</link>
 	<language>en-GB</language>
-${entries.map(([t, h, slug, img]) => `	<item>
+${entries.map(([t, h, slug, img, sum]) => `	<item>
 		<title>${t}</title>
 		<link>https://www.${slug.split('/')[0]}/${slug.split('/').slice(1).join('/')}/</link>
 		<dc:creator><![CDATA[Staff]]></dc:creator>
 		<pubDate>${hoursAgo(h)}</pubDate>
 		<category><![CDATA[News]]></category>
 		<guid isPermaLink="false">https://www.${slug.split('/')[0]}/?p=${h * 7}</guid>
-		<description><![CDATA[<p>Summary of ${t.replace(/&/g, '&amp;')}&#8230;</p>]]></description>
+		<description><![CDATA[<p>${sum ? sum.replace(/&/g, '&amp;') : 'Summary of ' + t.replace(/&/g, '&amp;') + '&#8230;'}</p><p>The post ${t.replace(/&/g, '&amp;')} appeared first on ${site}.</p>]]></description>
 		<content:encoded><![CDATA[${img ? `<p><img loading="lazy" src="${img}" alt="" width="1200" height="800" /></p>` : ''}<p>Full article body.</p>]]></content:encoded>
 	</item>`).join('\n')}
 </channel></rss>`;
 
 writeFileSync(join(here, 'news', 'this-is-anfield.xml'), wp('This Is Anfield', [
-  ['Bradley Barcola declared fit vs. Brighton as Victor Munoz doubt explained', 1, 'thisisanfield.com/2026/10/barcola-fit', 'https://www.thisisanfield.com/wp-content/uploads/barcola.jpg'],
+  ['Bradley Barcola declared fit vs. Brighton as Victor Munoz doubt explained', 1, 'thisisanfield.com/2026/10/barcola-fit', 'https://www.thisisanfield.com/wp-content/uploads/barcola.jpg', 'Andoni Iraola confirmed Bradley Barcola trained fully on Thursday and is available for Saturday. Victor Munoz is a doubt after picking up a knock against Villarreal. Dominik Szoboszlai remains out.'],
   ['Liverpool &#8216;make contact&#8217; for Felix Nmecha in new midfielder search', 3, 'thisisanfield.com/2026/10/nmecha', 'https://www.thisisanfield.com/wp-content/uploads/nmecha.jpg'],
-  ['Liverpool vs. Brighton could be in doubt due to storm', 5, 'thisisanfield.com/2026/10/storm', null],
-  ['Harvey Elliott challenged to &#8216;step up&#8217; after Liverpool and Valencia talks', 7, 'thisisanfield.com/2026/10/elliott', 'https://www.thisisanfield.com/wp-content/uploads/elliott.jpg'],
+  ['Liverpool vs. Brighton could be in doubt due to storm', 5, 'thisisanfield.com/2026/10/storm', null, 'Met Office warnings for Storm Amy could see Saturday’s game postponed, with a safety meeting at Anfield on Friday afternoon.'],
+  ['Harvey Elliott challenged to &#8216;step up&#8217; after Liverpool and Valencia talks', 7, 'thisisanfield.com/2026/10/elliott', 'https://www.thisisanfield.com/wp-content/uploads/elliott.jpg', 'Harvey Elliott has been told he must play regularly as Valencia hold talks with Liverpool over a January loan.'],
   ['Dominik Szoboszlai return timeline revealed after hamstring injury', 11, 'thisisanfield.com/2026/10/szoboszlai', null],
 ]));
 
@@ -206,5 +206,18 @@ writeFileSync(join(here, 'news', 'youtube.xml'), `<?xml version="1.0" encoding="
   <media:group><media:title>Liverpool 4 Villarreal 3</media:title><media:thumbnail url="https://i2.ytimg.com/vi/abc/hqdefault.jpg" width="480" height="360"/></media:group>
  </entry>
 </feed>`);
+
+writeFileSync(join(here, 'news', 'bbc.xml'), `<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/" version="2.0"><channel><title><![CDATA[BBC Sport - Liverpool]]></title>
+<item><title><![CDATA[Barcola passed fit for Liverpool's game against Brighton]]></title><description><![CDATA[Liverpool forward Bradley Barcola is fit to face Brighton on Saturday after recovering from a hip problem, manager Andoni Iraola says.]]></description><link>https://www.bbc.co.uk/sport/football/articles/c1barcola</link><guid isPermaLink="false">https://www.bbc.co.uk/sport/football/articles/c1barcola#0</guid><pubDate>${hoursAgo(0.5)}</pubDate><media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/barcola.jpg"/></item>
+<item><title><![CDATA[Elliott in talks over Valencia loan move]]></title><description><![CDATA[Liverpool midfielder Harvey Elliott is in talks over a loan move to Valencia in January, with the Spanish side agreeing terms with the player.]]></description><link>https://www.bbc.co.uk/sport/football/articles/c2elliott</link><pubDate>${hoursAgo(2)}</pubDate></item>
+<item><title><![CDATA[Klopp: Jota biography a fitting tribute]]></title><description><![CDATA[Former Liverpool manager Jurgen Klopp says a new biography of Diogo Jota, with proceeds going to charity, is a fitting tribute to the late forward.]]></description><link>https://www.bbc.co.uk/sport/football/articles/c3jota</link><pubDate>${hoursAgo(6)}</pubDate></item>
+</channel></rss>`);
+
+writeFileSync(join(here, 'news', 'guardian.xml'), `<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/" version="2.0"><channel><title>Liverpool | The Guardian</title>
+<item><title>Liverpool’s Barcola fit for Brighton but Szoboszlai still sidelined</title><link>https://www.theguardian.com/football/2026/oct/23/liverpool-barcola-fit-brighton</link><description>&lt;p&gt;Bradley Barcola will be available for Liverpool against Brighton, while Dominik Szoboszlai’s hamstring injury will keep him out until after the international break.&lt;/p&gt; &lt;a href="https://www.theguardian.com/football/2026/oct/23/liverpool-barcola-fit-brighton"&gt;Continue reading...&lt;/a&gt;</description><pubDate>${hoursAgo(1.2)}</pubDate><media:content width="140" url="https://i.guim.co.uk/img/media/barcola/master/140.jpg"/></item>
+<item><title>Storm Amy threatens Liverpool v Brighton at Anfield</title><link>https://www.theguardian.com/football/2026/oct/23/storm-liverpool-brighton</link><description>&lt;p&gt;Saturday’s match at Anfield could be postponed if forecasts of 80mph winds prove accurate, with a safety meeting scheduled for Friday afternoon.&lt;/p&gt;</description><pubDate>${hoursAgo(4)}</pubDate></item>
+</channel></rss>`);
 
 console.log('fixtures written');

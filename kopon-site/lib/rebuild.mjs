@@ -26,6 +26,26 @@ export function decideRebuild(live, feed, { now = new Date(), maxAgeHours = 24 }
     return gated('New YouTube Shorts');
   }
   const builtAt = Date.parse(live.builtAt || '');
+  // Stats: refresh soon after a match ends (results, table, next preview), and
+  // on the day before / day of a match (team news). `nextKickoff` is the first
+  // upcoming match when the live site was built.
+  // A match was still going when the site last built (extra time, penalties, a late kick-off):
+  // build again 45 minutes later, for up to 4 hours after its kick-off
+  const inPlay = Date.parse(live.inPlay || '');
+  if (Number.isFinite(inPlay) && Number.isFinite(builtAt) && now.getTime() - builtAt >= 45 * 60000) {
+    if (now.getTime() - inPlay < 4 * 3600000) return { rebuild: true, reason: 'Match was still going at the last build: updating the stats' };
+    if (builtAt < inPlay + 4 * 3600000) return gated('Match was still going at the last build: updating the stats');
+  }
+  const ko = Date.parse(live.nextKickoff || '');
+  if (Number.isFinite(ko) && Number.isFinite(builtAt)) {
+    const sinceKo = now.getTime() - ko;
+    if (builtAt < ko + 2 * 3600000 && sinceKo >= 2.25 * 3600000) {
+      // first 45 minutes after the final whistle: straight away (3 checks at most), then throttled
+      if (sinceKo < 3 * 3600000) return { rebuild: true, reason: 'Match finished: updating the stats' };
+      return gated('Match finished: updating the stats');
+    }
+    if (sinceKo < 0 && -sinceKo < 26 * 3600000 && now.getTime() - builtAt > 6 * 3600000) return gated('Matchday: refreshing team news');
+  }
   // Slots are 3 h apart, so allow 3 h early to keep the refresh roughly every maxAgeHours
   if (maxAgeHours && (!Number.isFinite(builtAt) || now.getTime() - builtAt > Math.max(1, maxAgeHours - 3) * 3600000)) {
     return gated(`Daily refresh (last build ${live.builtAt || 'unknown'})`);

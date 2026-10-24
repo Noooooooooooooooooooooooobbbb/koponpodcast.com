@@ -464,3 +464,142 @@ test('links to other sites open in a new tab; own links do not', async () => {
   assert.match(out, /<a href="#listen">f<\/a>/);
   assert.equal((out.match(/target="_blank"/g) || []).length, 2);
 });
+
+// ---------------------------------------------------------------- top stories
+test('clickbait: the real headlines from the old WordPress page', async () => {
+  const { isClickbait, isNonStory } = await import('../lib/topstories.mjs');
+  const bait = [
+    'Ian Rush imparts 5-word advice to ‘fantastic’ Bradley Barcola after £106m Liverpool move',
+    'Liverpool scouts watched £50m wizard score in midweek; his club signed him over Bruno Fernandes',
+    'Chris Sutton gives Liverpool v Brighton prediction as he backs 6-month sequence to continue',
+    '‘Definitely interested’ – Liverpool considered ‘front-runners’ to sign wantaway £100m powerhouse',
+    '‘If he continues like this…’ – Spanish media deliver emphatic verdict on Ifeanyi Ndukwe',
+    '‘To this day…’ – Jurgen Klopp makes heartbreaking confession over Diogo Jota’s death',
+    'Liverpool fan favourite has quietly amassed eye-catching statistic bettered only by Lamine Yamal',
+    'Liverpool fans rush to get 50% off 26/27 home shirt before flash sale ends Friday',
+    'Jurgen Klopp makes Harry Kane feelings clear as ex-Liverpool boss reignites feud',
+    'Sky reporter explains why Bradley Barcola didn’t train with Liverpool squad on Thursday',
+  ];
+  const news = [
+    'Liverpool schedule meeting with agents to discuss potential cancellation of loan deal',
+    'Bradley Barcola declared fit vs. Brighton as Victor Munoz doubt explained',
+    'Liverpool ‘make contact’ for Felix Nmecha in new midfielder search',
+    'Harvey Elliott challenged to ‘step up’ after Liverpool and Valencia talks',
+    'Dominik Szoboszlai return timeline revealed after hamstring injury',
+    'Diogo Jota biography released by Liverpool – with proceeds to fitting cause',
+    'Liverpool attend Harvey Elliott meeting as Valencia in agreement over winger',
+    'Referee who made confirmed Liverpool error picked for Reds vs Brighton clash',
+    'Liverpool complete signing of French forward Bradley Barcola',
+    'Everton 1-2 Liverpool: Reds win first Merseyside derby at Everton’s new stadium',
+  ];
+  for (const t of bait) assert.ok(isClickbait(t), 'should be clickbait: ' + t);
+  for (const t of news) assert.ok(!isClickbait(t), 'should be news: ' + t);
+  assert.ok(isNonStory('Liverpool 4 Villarreal 3 | Post Match Pint'));
+  assert.ok(isNonStory('Andoni Iraola Liverpool press conference LIVE - Barcola, Szoboszlai'));
+  assert.ok(!isNonStory('Barcola passed fit for Liverpool'));
+  assert.ok(isClickbait('Liverpool transfer gossip roundup', ['transfer gossip']), 'Owen can add his own clickbait words');
+});
+
+test('top stories: groups the same story, ranks by coverage, factual headline and real summary', async () => {
+  const cfg = (await import('../site.config.mjs')).default;
+  const { newsOptions } = await import('../lib/news.mjs');
+  const map = {};
+  for (const s of cfg.news.sources) map[typeof s.urls[0] === 'string' ? s.urls[0] : s.urls[0].url] = `news/${s.id}.xml`;
+  const fetch = async (u) => { try { return new Response(fx(map[u])); } catch { return new Response('x', { status: 404 }); } };
+  const d = await fetchAllNews(cfg.news.sources, newsOptions(cfg, { fetch, now: '2026-10-23T12:00:00Z', includeCandidates: true }));
+  assert.equal(d.top.length, 5);
+  const [a, b, c] = d.top;
+  assert.equal(a.headline, "Barcola passed fit for Liverpool's game against Brighton", 'BBC is trusted most');
+  assert.equal(a.count, 4);
+  assert.deepEqual(a.sources.map((s) => s.name).sort(), ['BBC Sport', 'Liverpool Echo', 'The Guardian', 'This Is Anfield']);
+  assert.match(a.summary, /^Liverpool forward Bradley Barcola is fit to face Brighton on Saturday/);
+  assert.match(b.headline, /Elliott/); assert.equal(b.count, 3);
+  assert.match(c.headline, /Storm Amy/); assert.equal(c.count, 2, 'storm story from two sites merged via their summaries');
+  assert.ok(!d.top.some((s) => /Ian Rush|signing of French/.test(s.headline)));
+  const fit = d.candidates.find((s) => /Barcola passed fit/.test(s.headline));
+  assert.ok(!fit.urls.some((u) => /anfield-online|empireofthekop/.test(u)), 'the old "Barcola signs" story and Ian Rush clickbait are not glued to "Barcola fit"');
+  // clickbait never reaches the news lists
+  assert.ok(!d.items.some((i) => /imparts 5-word|heartbreaking confession|50% off/.test(i.title)));
+  assert.ok(d.items.every((i) => !('summary' in i)), 'summaries stay out of the list (smaller page)');
+  // HTML from feeds can't sneak into summaries
+  assert.ok(d.top.every((s) => !/[<>]/.test(s.summary)));
+});
+
+test('top stories: Owen\'s edits (rewrite, hide, pin, expiry)', async () => {
+  const { applyTopEdits } = await import('../lib/topstories.mjs');
+  const now = new Date('2026-10-23T12:00:00Z');
+  const auto = ['a', 'b', 'c', 'd', 'e', 'f'].map((k, i) => ({ key: `site.com/${k}`, urls: [`site.com/${k}`, `other.com/${k}`], headline: `Auto ${k}`, summary: `S ${k}`, sources: [], count: 2, date: now.toISOString(), score: 10 - i }));
+  const out = applyTopEdits(auto, {
+    pinned: [{ id: 'x1', headline: 'Owen’s story', summary: 'Mine', url: 'javascript:alert(1)', until: '2026-10-25T00:00:00Z' }, { id: 'old', headline: 'Expired', until: '2026-10-20T00:00:00Z' }],
+    hidden: ['https://other.com/b?utm=1'],
+    changes: { 'site.com/c': { headline: 'Better headline', summary: '' } },
+  }, { now });
+  assert.deepEqual(out.map((s) => s.headline), ['Owen’s story', 'Auto a', 'Better headline', 'Auto d', 'Auto e']);
+  assert.equal(out[0].pinned, true);
+  assert.equal(out[0].url, '', 'unsafe link dropped');
+  assert.equal(out[2].summary, 'S c', 'blank summary edit keeps the original');
+  assert.ok(out.every((s) => !('urls' in s) && !('score' in s)));
+});
+
+test('editor: password, GitHub save/load, validation', async () => {
+  const { handleEditor, cleanEdits, parseEditsFile, serialiseEdits, passwordOk } = await import('../lib/editor.mjs');
+  assert.equal(passwordOk('short', 'short'), false, 'passwords under 8 characters never work');
+  assert.equal(passwordOk('correct horse', 'correct horse'), true);
+  assert.equal(passwordOk('wrong', 'correct horse'), false);
+  const text = serialiseEdits({ pinned: [], hidden: ['a'], changes: {} });
+  assert.deepEqual(parseEditsFile(text).hidden, ['a']);
+  const mod = await import('data:text/javascript,' + encodeURIComponent(text));
+  assert.deepEqual(mod.default.hidden, ['a'], 'the saved file is a valid module the site can import');
+
+  const files = new Map();
+  let shaN = 0;
+  const gh = async (url, init = {}) => {
+    assert.match(url, /^https:\/\/api\.github\.com\/repos\/owen\/kopon\/contents\/kopon-site\/content\/top-stories\.mjs/);
+    assert.equal(init.headers.Authorization, 'Bearer tok');
+    if (!init.method || init.method === 'GET') {
+      const f = files.get('f');
+      return f ? new Response(JSON.stringify({ content: Buffer.from(f.text).toString('base64'), sha: f.sha })) : new Response('{}', { status: 404 });
+    }
+    const body = JSON.parse(init.body);
+    const cur = files.get('f');
+    if (cur && body.sha !== cur.sha) return new Response('{}', { status: 409 });
+    const sha = 'sha' + (++shaN);
+    files.set('f', { text: Buffer.from(body.content, 'base64').toString('utf8'), sha });
+    return new Response(JSON.stringify({ content: { sha } }));
+  };
+  const env = { EDITOR_PASSWORD: 'correct horse', GITHUB_TOKEN: 'tok', GITHUB_REPO: 'owen/kopon' };
+  const loadNews = async (edits) => ({ candidates: [{ key: 'k1', headline: 'H' }], top: [], updated: 'now', edits });
+  const post = (body) => new Request('https://x/api/editor', { method: 'POST', body: JSON.stringify(body) });
+  const deps = { env, fetchImpl: gh, loadNews, delay: async () => {}, now: new Date('2026-10-23T12:00:00Z') };
+
+  let r = await handleEditor(post({ action: 'load', password: 'nope' }), deps);
+  assert.equal(r.status, 401);
+  r = await handleEditor(new Request('https://x/api/editor'), deps);
+  assert.equal(r.status, 405);
+  r = await handleEditor(post({ action: 'load', password: 'correct horse' }), { ...deps, env: { EDITOR_PASSWORD: 'correct horse' } });
+  assert.equal(r.status, 503, 'clear message when GitHub saving is not set up');
+  r = await handleEditor(post({ action: 'load', password: 'x' }), { ...deps, env: {} });
+  assert.equal(r.status, 503);
+
+  r = await handleEditor(post({ action: 'load', password: 'correct horse' }), deps);
+  let j = await r.json();
+  assert.equal(r.status, 200); assert.equal(j.sha, null); assert.equal(j.candidates[0].key, 'k1');
+
+  r = await handleEditor(post({ action: 'save', password: 'correct horse', sha: null, edits: { pinned: [{ headline: '<b>Big</b> news', summary: 'x'.repeat(5000), url: 'javascript:alert(1)', days: 2 }], hidden: ['k9'], changes: { k1: { headline: 'New H' } }, evil: 1 } }), deps);
+  j = await r.json();
+  assert.equal(r.status, 200); assert.equal(j.sha, 'sha1');
+  const saved = parseEditsFile(files.get('f').text);
+  assert.equal(saved.pinned[0].headline, '<b>Big</b> news', 'stored as text; the site escapes it when showing it');
+  assert.equal(saved.pinned[0].summary.length, 600);
+  assert.equal(saved.pinned[0].url, '');
+  assert.equal(saved.pinned[0].until, '2026-10-25T12:00:00.000Z');
+  assert.deepEqual(saved.hidden, ['k9']);
+  assert.ok(!('evil' in saved));
+
+  r = await handleEditor(post({ action: 'save', password: 'correct horse', sha: 'stale', edits: {} }), deps);
+  assert.equal(r.status, 409, 'two people saving at once: the second is told to reload');
+  r = await handleEditor(post({ action: 'load', password: 'correct horse' }), deps);
+  j = await r.json();
+  assert.equal(j.sha, 'sha1'); assert.equal(j.edits.changes.k1.headline, 'New H');
+  assert.deepEqual(cleanEdits({ pinned: [{ headline: 'old', until: '2020-01-01' }] }).pinned, [], 'expired stories are tidied away');
+});
