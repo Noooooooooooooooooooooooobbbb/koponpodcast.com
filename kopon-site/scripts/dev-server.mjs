@@ -4,7 +4,7 @@
 //   npm run dev                -> http://localhost:8888 (live news)
 //   node scripts/dev-server.mjs --fixtures   (news from test/fixtures, offline)
 import { createServer } from 'node:http';
-import { stat, readFile, open } from 'node:fs/promises';
+import { stat, readFile, open, readdir } from 'node:fs/promises';
 import { join, extname, resolve, dirname, normalize } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -106,6 +106,21 @@ const server = createServer(async (req, res) => {
       const r = await fansFn(new Request(url, { method: req.method, headers, body: req.method === 'POST' ? Buffer.concat(chunks) : undefined }), null);
       res.writeHead(r.status, Object.fromEntries(r.headers));
       return res.end(await r.text());
+    }
+    // Netlify's Image CDN, imitated: with --fixtures a test picture (none for addresses containing
+    // "missing", to test the logo fallback); otherwise the original picture, unresized
+    if (url.pathname === '/.netlify/images') {
+      const src = url.searchParams.get('url') || '';
+      if (!/^https:\/\/d3t3ozftmdmh3i\.cloudfront\.net\//.test(src)) { res.writeHead(400); return res.end('remote image not allowed'); }
+      if (flag('--fixtures')) {
+        if (/missing/.test(src)) { res.writeHead(404); return res.end('no such image'); }
+        const faces = (await readdir(join(ROOT, 'test/fixtures/faces'))).filter((f) => f.endsWith('.png')).sort();
+        let h = 0; for (const c of src) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+        return await sendFile(req, res, join(ROOT, 'test/fixtures/faces', faces[h % faces.length]));
+      }
+      const r = await fetch(src);
+      res.writeHead(r.status, { 'Content-Type': r.headers.get('content-type') || 'image/jpeg' });
+      return res.end(Buffer.from(await r.arrayBuffer()));
     }
     if (url.pathname === '/__now') { if (url.searchParams.get('t')) process.env.KOPON_NOW = url.searchParams.get('t'); else delete process.env.KOPON_NOW; res.writeHead(200); return res.end(process.env.KOPON_NOW || 'real'); }
     if (url.pathname === '/__gh-file') {

@@ -104,7 +104,7 @@ button { font: inherit; color: inherit; }
 .actions { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .hero-more { margin: 18px 0 0; font-size: 15px; }
 .hero-art { flex: 1 1 260px; max-width: 340px; min-width: 0; }
-.hero-art .art { width: 100%; aspect-ratio: 1 / 1; border-radius: 20px; box-shadow: 0 30px 80px rgba(200, 16, 46, 0.28); }
+.hero-art .art { display: block; width: 100%; height: auto; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 20px; box-shadow: 0 30px 80px rgba(200, 16, 46, 0.28); }
 @media (max-width: 600px) {
   .hero-grid { padding-top: 28px; padding-bottom: 44px; gap: 36px; }
   .hero-art { max-width: none; flex-basis: 100%; }
@@ -134,6 +134,8 @@ button { font: inherit; color: inherit; }
 .play-btn:hover { background: var(--red); border-color: var(--red); color: #fff; }
 .play-btn.is-playing { background: var(--red); border-color: var(--red); color: #fff; }
 .play-btn .icon { width: 14px; height: 14px; }
+.ep-thumb { flex: none; width: 64px; height: 64px; border-radius: 10px; object-fit: cover; background: var(--bg-3); }
+@media (max-width: 520px) { .ep-thumb { width: 52px; height: 52px; border-radius: 8px; } .ep-row { gap: 14px; } }
 .ep-text { flex: 1; min-width: 0; padding-top: 2px; }
 .ep-title { overflow-wrap: anywhere; display: block; font-size: 19px; font-weight: 600; line-height: 1.3; color: var(--fg); text-decoration: none; }
 .ep-title::after { content: ""; position: absolute; inset: 0; }
@@ -185,6 +187,13 @@ button { font: inherit; color: inherit; }
   .hero, .ep-hero { overflow: visible; overflow-x: clip; clip-path: inset(-1000px 0 0 0); }
 }
 .ep-hero-inner { position: relative; padding-top: 28px; padding-bottom: 48px; }
+.ep-hero-grid { display: flex; align-items: center; justify-content: space-between; gap: 32px; }
+.ep-hero-copy { flex: 1 1 auto; min-width: 0; }
+.ep-art { flex: none; width: 240px; height: 240px; border-radius: 18px; object-fit: cover; box-shadow: 0 24px 60px rgba(200, 16, 46, 0.25); }
+@media (max-width: 760px) {
+  .ep-hero-grid { flex-direction: column-reverse; align-items: flex-start; gap: 20px; }
+  .ep-art { width: 160px; height: 160px; border-radius: 14px; }
+}
 .ep-hero h1 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(42px, 6.6vw, 88px); line-height: 0.95; text-transform: uppercase; letter-spacing: 0.005em; color: #fff; overflow-wrap: break-word; max-width: 980px; }
 .player-lg { margin-top: 32px; display: flex; gap: 22px; align-items: center; max-width: 900px; }
 .big-play { flex: none; width: 76px; height: 76px; border-radius: 999px; border: 0; background: var(--red); color: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 14px 40px rgba(200, 16, 46, .35); transition: background .15s, transform .1s; }
@@ -299,7 +308,7 @@ button { font: inherit; color: inherit; }
 .mini { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; background: rgba(21, 21, 28, .96); border-top: 1px solid var(--line-2); box-shadow: 0 -10px 40px rgba(0, 0, 0, .45); }
 @supports (backdrop-filter: blur(8px)) { .mini { background: rgba(21, 21, 28, .85); backdrop-filter: blur(14px); } }
 .mini-inner { display: flex; align-items: center; gap: 14px; padding-top: 12px; padding-bottom: 14px; }
-.mini-inner > img { width: 48px; height: 48px; border-radius: 10px; flex: none; }
+.mini-inner > img { width: 48px; height: 48px; border-radius: 10px; flex: none; object-fit: cover; }
 .mini-info { flex: 1; min-width: 0; }
 .mini-title { display: block; color: var(--fg); font-weight: 600; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mini-title:hover { color: #fff; text-decoration: underline; }
@@ -808,3 +817,9 @@ body.opp-open .opp-tab { visibility: hidden; }
   .avg-big { font-size: 72px; }
 }
 @media (prefers-reduced-motion: reduce) { .is-revealing .rr { animation: none; } .opp-drawer { transition: none; } }
+
+/* ---- About (home) ---------------------------------------------------------------- */
+.about-band { padding-top: 8px; padding-bottom: 56px; max-width: 860px; }
+.about-band h2 { margin: 0 0 12px; font-family: var(--display); font-weight: 400; font-size: clamp(28px, 4vw, 40px); text-transform: uppercase; letter-spacing: 0.01em; }
+.about-band p { margin: 0 0 12px; color: var(--muted); line-height: 1.65; }
+.about-band a { color: var(--fg); }

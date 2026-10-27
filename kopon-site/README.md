@@ -204,3 +204,19 @@ python3 test/browser_test.py   # full browser tests (needs: pip install playwrig
 ```
 
 To preview offline with the test data: `node test/build-fixture-site.mjs --port 8888 && node scripts/dev-server.mjs --fixtures --port 8888`.
+
+## Search engines (SEO)
+
+The site is set up to be found and understood by Google, Bing (which also powers DuckDuckGo, Yahoo and Ecosia), Brave and others:
+
+- **A sitemap** (`/sitemap.xml`) lists every page, with each episode's artwork for image search, and `robots.txt` points to it. It's already submitted in Google Search Console and Bing Webmaster Tools.
+- **IndexNow:** after every new build goes live, the 15-minute check tells Bing, Yandex and others which pages are new or changed, so new episodes appear there within hours instead of days. The key file (`src/static/e0c17130937fbfb6c3e05325380eec19.txt`) proves the site is yours. Turn it off with `indexNow: false` in `site.config.mjs`.
+- **Every page** has its own title (ending "| Kop On! LFC podcast"), a description of up to 155 characters, a canonical address, social-sharing cards (episode pages use the episode's artwork) and structured data. That covers the podcast series, each episode (season, number, length, host), Kop On! as an organisation with its other profiles (Spotify, Apple, YouTube, Patreon, Facebook), and breadcrumbs.
+- **One address:** visitors to the free Netlify address (koponpodcast-220d25.netlify.app) are sent to koponpodcast.com, so search engines see one site, not two.
+- **The home page** has a short "About Kop On!" section describing the show.
+
+To add another profile (Instagram, X, TikTok…), put its address in `sameAs` in `site.config.mjs`. If a search engine ever asks you to verify the site with a code, put the code in `verification` there.
+
+## Episode artwork
+
+Each episode's own artwork (from the podcast feed) appears beside it on the home page, on its episode page, in the episodes list, in the mini player and on phone lock screens. Netlify's free Image CDN serves small, fast copies (`[images]` in `netlify.toml`). If an episode has no artwork of its own, or it can't be loaded, the Kop On! logo is shown instead.

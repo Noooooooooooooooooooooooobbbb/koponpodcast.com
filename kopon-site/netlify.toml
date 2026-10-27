@@ -5,6 +5,18 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# One address for search engines: the free Netlify address sends visitors to koponpodcast.com
+# (preview builds have their own addresses and are unaffected)
+[[redirects]]
+  from = "https://koponpodcast-220d25.netlify.app/*"
+  to = "https://koponpodcast.com/:splat"
+  status = 301
+  force = true
+
+# Episode artwork is resized by Netlify's Image CDN (/.netlify/images); only the podcast's own image host is allowed
+[images]
+  remote_images = ['https://d3t3ozftmdmh3i\.cloudfront\.net/.*']
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"

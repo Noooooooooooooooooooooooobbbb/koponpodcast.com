@@ -177,6 +177,15 @@ def main():
             page.goto(BASE + '/', wait_until='networkidle')
             check(page.inner_text('.hero-label').strip().lower() == 'latest episode' and page.inner_text('#hero-title').strip().lower() == 'rio the hero!', '"Latest episode" label above the episode title')
             check(page.get_attribute('.prev-link a', 'href') == '/episodes/' and page.get_attribute('.prev-link a', 'target') is None, 'small "Previous episodes" link to the episodes page (same tab)')
+            # episode artwork: the latest episode's own picture, resized by the image CDN
+            art = page.evaluate("(() => { const i = document.querySelector('.hero-art img.art'); return { src: i.currentSrc || i.src, w: i.naturalWidth, alt: i.alt, box: Math.round(i.getBoundingClientRect().width) }; })()")
+            check('/.netlify/images?url=' in art['src'] and 'ep-0.jpg' in art['src'] and art['w'] > 0 and art['alt'] == 'Artwork for Rio the Hero!' and art['box'] >= 240, f"the latest episode's artwork appears next to it {art}")
+            # SEO: one main heading, unique title, social tags, structured data
+            seo = page.evaluate("""(() => ({ h1: document.querySelectorAll('h1').length, title: document.title, robots: document.querySelector('meta[name=robots]').content,
+              og: document.querySelector('meta[property="og:image:alt"]') && document.querySelector('meta[name="twitter:title"]') ? 1 : 0,
+              ld: [...document.querySelectorAll('script[type="application/ld+json"]')].map(s => JSON.parse(s.textContent)['@type']),
+              about: (document.querySelector('#about-h') || {}).textContent }))()""")
+            check(seo['h1'] == 1 and 'max-image-preview:large' in seo['robots'] and seo['og'] and set(['PodcastSeries', 'Organization', 'WebSite']) <= set(seo['ld']) and seo['about'] == 'About Kop On!', f'home: search-engine tags, structured data and the About section {seo}')
             check(page.evaluate("document.querySelectorAll('main .ep-row').length") == 0, 'recent-episodes list removed from the home page')
             nw = page.evaluate("(() => { const n = document.querySelector('.home-news').getBoundingClientRect(); const h = document.querySelector('.site-header').getBoundingClientRect(); return [Math.round(n.width), Math.round(h.width)]; })()")
             check(abs(nw[0] - nw[1]) <= 2, f'Latest LFC news spans the full page width {nw}')
@@ -236,6 +245,7 @@ def main():
             page.mouse.wheel(0, 3000); page.wait_for_timeout(500)
             check(not A("document.getElementById('miniplayer').hidden"), 'mini player appears when you scroll away')
             check('Rio the Hero!' in page.inner_text('#miniplayer .mini-title'), 'mini player shows the episode title')
+            check('/.netlify/images?url=' in (page.get_attribute('#miniplayer .mini-inner > img', 'src') or ''), "mini player shows the episode's artwork")
             t0 = A('KopOnPlayer.audio.currentTime')
             page.click('#miniplayer .skip-fwd'); page.wait_for_timeout(300)
             check(A('KopOnPlayer.audio.currentTime') - t0 >= 25, 'skip +30 s works')
@@ -315,6 +325,11 @@ def main():
             page.goto(BASE + '/episodes/', wait_until='networkidle')
             vis = lambda: page.evaluate("document.querySelectorAll('.ep-row:not([hidden])').length")
             check(vis() == 50, 'all 50 episodes listed')
+            th = page.evaluate("(() => { const t = [...document.querySelectorAll('.ep-row .ep-thumb')]; return { n: t.length, lazy: t.every(i => i.loading === 'lazy'), cdn: t.filter(i => i.src.includes('/.netlify/images')).length, logo: t.filter(i => i.src.includes('/assets/logo-96')).length }; })()")
+            check(th['n'] == 50 and th['lazy'] and th['cdn'] >= 1 and th['cdn'] + th['logo'] == 50, f'every episode in the list has a small picture (its own artwork, or the logo) {th}')
+            page.evaluate("window.scrollTo(0, 0)"); page.wait_for_timeout(300)
+            first = page.evaluate("(() => { const i = document.querySelector('.ep-row .ep-thumb'); const r = i.getBoundingClientRect(); return [i.complete && i.naturalWidth > 0, Math.round(r.width), Math.round(r.height)]; })()")
+            check(first[0] and first[1] == first[2] and first[1] >= 52, f'the first picture loads and is square {first}')
             page.fill('#episode-search', 'kavanagh'); check(vis() == 1, 'search "kavanagh" finds 1')
             page.fill('#episode-search', 'jeremy'); check(vis() >= 1, 'search ignores accents ("jeremy" finds Jérémy)')
             page.fill('#episode-search', 'iraolas interview'); check(vis() == 3, 'search ignores apostrophes ("iraolas interview")')
@@ -323,6 +338,29 @@ def main():
             check(page.evaluate("[...document.querySelectorAll('.ep-group')].every(g => g.hidden)"), 'empty month headings hide')
             page.fill('#episode-search', ''); check(vis() == 50, 'clearing search restores all')
             page.goto(BASE + '/episodes/?q=barcola', wait_until='networkidle'); check(vis() >= 1 and page.input_value('#episode-search') == 'barcola', '?q= in the URL pre-fills search')
+
+            print('\n== Episode artwork and search-engine tags ==')
+            page.goto(BASE + '/episodes/rio-the-hero/', wait_until='networkidle')
+            ea = page.evaluate("(() => { const i = document.querySelector('.ep-hero .ep-art'); return { ok: i.complete && i.naturalWidth > 0, w: Math.round(i.getBoundingClientRect().width), alt: i.alt }; })()")
+            check(ea['ok'] and ea['w'] == 240 and ea['alt'] == 'Artwork for Rio the Hero!', f'episode page shows its artwork beside the title {ea}')
+            meta = page.evaluate("""(() => { const m = (s) => (document.querySelector(s) || {}).content; const lds = [...document.querySelectorAll('script[type="application/ld+json"]')].map(s => JSON.parse(s.textContent));
+              const ep = lds.find(l => l['@type'] === 'PodcastEpisode') || {}; const bc = lds.find(l => l['@type'] === 'BreadcrumbList') || { itemListElement: [] };
+              return { title: document.title, desc: m('meta[name=description]'), card: m('meta[name="twitter:card"]'), pub: m('meta[property="article:published_time"]'), img: m('meta[property="og:image"]'),
+                ep: [ep.name, !!ep.partOfSeason || ep.partOfSeason === undefined, ep.author && ep.author.name, !!(ep.associatedMedia && ep.associatedMedia.duration)], crumbs: bc.itemListElement.map(i => i.name) }; })()""")
+            check(meta['title'] == 'Rio the Hero! | Kop On! LFC podcast' and len(meta['desc']) <= 156 and meta['card'] == 'summary' and meta['pub'] and 'cloudfront' in meta['img'], f'episode page: title, description, social card with its artwork {meta}')
+            check(meta['ep'][0] == 'Rio the Hero!' and meta['ep'][2] == 'Owen Thomas' and meta['ep'][3] and meta['crumbs'] == ['Home', 'Episodes', 'Rio the Hero!'], f'episode page: structured data and breadcrumbs {meta}')
+            # if the artwork can't be loaded, the Kop On! logo shows instead
+            page.route(re.compile(r'.*/\.netlify/images.*'), lambda r: r.fulfill(status=404, body=''))
+            page.goto(BASE + '/episodes/rio-the-hero/', wait_until='networkidle'); page.wait_for_timeout(300)
+            fb = page.evaluate("(() => { const i = document.querySelector('.ep-hero .ep-art'); return [i.currentSrc || i.src, i.complete && i.naturalWidth > 0]; })()")
+            check('/assets/logo.jpg' in fb[0] and fb[1], f'artwork that fails to load falls back to the logo {fb}')
+            page.unroute(re.compile(r'.*/\.netlify/images.*'))
+            sm = page.evaluate("fetch('/sitemap.xml').then(r => r.text())")
+            check('xmlns:image=' in sm and sm.count('<image:loc>https://d3t3ozftmdmh3i.cloudfront.net/') >= 10, 'sitemap lists episode artwork for image search')
+            stx = page.evaluate("fetch('/site-status.json').then(r => r.json())")
+            check(isinstance(stx.get('indexNow'), list) and 'https://koponpodcast.com/' in stx['indexNow'], 'the build lists changed pages for IndexNow')
+            key = page.evaluate("fetch('/e0c17130937fbfb6c3e05325380eec19.txt').then(r => r.text())")
+            check(key.strip() == 'e0c17130937fbfb6c3e05325380eec19', 'IndexNow key file is published')
             page.close()
 
             print('\n== News ==')

@@ -2,6 +2,7 @@
 import { esc, jsonForScript, clock } from '../lib/text.mjs';
 import { renderNewsGrid, renderNewsPage, renderTopStories, pickDiverse } from './assets/news-render.js';
 import { fansBand } from './fans-templates.mjs';
+import { artAttrs, artSrc, episodeArt } from '../lib/art.mjs';
 
 // ---- icons --------------------------------------------------------------------
 const I = {
@@ -16,7 +17,16 @@ const playPause = I.play + I.pause;
 
 // ---- helpers --------------------------------------------------------------------
 const epUrl = (ep) => `/episodes/${ep.slug}/`;
-const playData = (ep) => esc(JSON.stringify({ guid: ep.guid, title: ep.title, src: ep.audio?.url || '', href: epUrl(ep), dur: ep.durationSeconds || 0 }));
+// Episode artwork (falls back to the show logo if the picture can't be loaded)
+let LOGO = '/assets/logo.jpg', LOGO_96 = '/assets/logo-96.jpg';
+export const setLogos = (assets) => { LOGO = assets['logo.jpg'] || LOGO; LOGO_96 = assets['logo-96.jpg'] || LOGO_96; };
+function artImg(ep, size, { cls = 'art', alt = '', lazy = true, priority = false, small = false } = {}) {
+  const a = artAttrs(ep.art, size);
+  const fallback = small ? LOGO_96 : LOGO;
+  if (!a) return `<img class="${cls}" src="${fallback}" alt="${esc(alt)}" width="${size}" height="${size}"${lazy ? ' loading="lazy"' : ''} decoding="async"${priority ? ' fetchpriority="high"' : ''}>`;
+  return `<img class="${cls}" src="${esc(a.src)}"${a.srcset ? ` srcset="${esc(a.srcset)}"` : ''} alt="${esc(alt)}" width="${size}" height="${size}"${lazy ? ' loading="lazy"' : ''} decoding="async"${priority ? ' fetchpriority="high"' : ''} onerror="this.onerror=null;this.removeAttribute('srcset');this.src='${fallback}'">`;
+}
+const playData = (ep) => esc(JSON.stringify({ guid: ep.guid, title: ep.title, src: ep.audio?.url || '', href: epUrl(ep), dur: ep.durationSeconds || 0, ...(ep.art ? { art: artSrc(ep.art, 96), art512: artSrc(ep.art, 512) } : {}) }));
 
 // Deterministic "waveform" per episode (decorative; the seek bar is a real slider)
 function waveBars(seed, count) {
@@ -45,7 +55,7 @@ export function epRow(ep, { showExcerpt = false, search = '' } = {}) {
   const canPlay = !!ep.audio;
   return `<li class="ep-row"${search ? ` data-search="${esc(search)}"` : ''}>${
     canPlay ? `<button class="play-btn" type="button" data-play="${playData(ep)}" aria-label="Play ${esc(ep.title)}">${playPause}</button>` : '<span class="play-btn" aria-hidden="true"></span>'
-  }<div class="ep-text"><a class="ep-title" href="${epUrl(ep)}">${esc(ep.title)}</a><span class="ep-meta"><time datetime="${esc(ep.dateIso)}">${esc(ep.dateShort)}</time>${ep.durationText ? ` · ${esc(ep.durationText)}` : ''}</span>${showExcerpt && ep.excerpt ? `<p class="ep-excerpt">${esc(ep.excerpt)}</p>` : ''}</div></li>`;
+  }${artImg(ep, 64, { cls: 'ep-thumb', small: true })}<div class="ep-text"><a class="ep-title" href="${epUrl(ep)}">${esc(ep.title)}</a><span class="ep-meta"><time datetime="${esc(ep.dateIso)}">${esc(ep.dateShort)}</time>${ep.durationText ? ` · ${esc(ep.durationText)}` : ''}</span>${showExcerpt && ep.excerpt ? `<p class="ep-excerpt">${esc(ep.excerpt)}</p>` : ''}</div></li>`;
 }
 
 // ---- YouTube Shorts ----------------------------------------------------------------
@@ -106,14 +116,52 @@ export function layout(ctx, page, content) {
   return externalLinksInNewTab(layoutInner(ctx, page, content), ctx.config.siteUrl);
 }
 
+// Search-result snippets are cut at about 155 characters: end on a whole word
+export function metaDescription(text, max = 155) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  const cut = t.slice(0, max - 1);
+  const sp = cut.lastIndexOf(' ');
+  return `${(sp > max * 0.6 ? cut.slice(0, sp) : cut).replace(/[\s,;:.!?–-]+$/, '')}…`;
+}
+
+// "Home › Episodes › Ron the Rattler!" for search results, from the page's address
+const SECTIONS = { episodes: 'Episodes', news: 'News', stats: 'Stats', fans: 'Fan zone', community: 'Community', lineup: 'Pick your XI' };
+export function breadcrumbLd(config, path, title) {
+  const parts = path.split('/').filter(Boolean);
+  if (!parts.length) return null;
+  const items = [{ name: 'Home', url: `${config.siteUrl}/` }];
+  let acc = '';
+  parts.forEach((p, i) => {
+    acc += `/${p}`;
+    const last = i === parts.length - 1;
+    if (last) items.push({ name: title || SECTIONS[p] || p, url: `${config.siteUrl}${acc}/` });
+    else if (SECTIONS[p]) items.push({ name: SECTIONS[p], url: `${config.siteUrl}${acc}/` });
+  });
+  return { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: items.map((it, i) => ({ '@type': 'ListItem', position: i + 1, name: it.name, item: it.url })) };
+}
+
+// Who makes the show (one shared description, referenced from every page)
+export const publisherLd = (config, assets) => ({
+  '@context': 'https://schema.org', '@type': 'Organization', '@id': `${config.siteUrl}/#org`, name: 'Kop On!', alternateName: [config.title, 'Kop On podcast', 'Kop On Liverpool FC Podcast'],
+  url: `${config.siteUrl}/`, logo: { '@type': 'ImageObject', url: `${config.siteUrl}${assets['icon-512.png']}`, width: 512, height: 512 },
+  founder: { '@type': 'Person', '@id': `${config.siteUrl}/#owen`, name: config.author },
+  sameAs: [...new Set([...config.listen.map((l) => l.url), config.patreon, ...(config.sameAs || [])].filter(Boolean))],
+});
+
 function layoutInner(ctx, page, content) {
   const { config, assets } = ctx;
   const url = config.siteUrl + page.path;
-  const title = page.title ? `${page.title} | ${config.shortTitle}` : config.title;
-  const desc = page.description || config.description;
+  const suffix = config.titleSuffix || config.shortTitle;
+  // long titles get the short suffix, so the episode name isn't cut off in search results
+  const title = page.title ? `${page.title} | ${page.title.length + suffix.length > 60 ? config.shortTitle : suffix}` : config.title;
+  const desc = metaDescription(page.description || config.description);
   const img = page.image || `${config.siteUrl}${assets['og-card.jpg']}`;
+  const imgAlt = page.imageAlt || (page.image ? page.title || config.title : `${config.title}`);
+  const crumbs = page.noindex || page.path === '/' ? null : breadcrumbLd(config, page.path, page.crumbTitle || page.title);
+  const ver = config.verification || {};
   const nav = [['Episodes', '/episodes/'], ['News', '/news/'], ['Stats', '/stats/'], ['Fan zone', '/fans/'], ['Community', '/community/']];
-  const jsonLd = (page.jsonLd || []).map((j) => `<script type="application/ld+json">${jsonForScript(j)}</script>`).join('\n');
+  const jsonLd = [...(page.jsonLd || []), ...(crumbs ? [crumbs] : [])].map((j) => `<script type="application/ld+json">${jsonForScript(j)}</script>`).join('\n');
   const scripts = [
     `<script src="${assets['player.js']}" defer></script>`,
     page.search ? `<script src="${assets['search.js']}" defer></script>` : '',
@@ -135,6 +183,7 @@ function layoutInner(ctx, page, content) {
 <link rel="canonical" href="${esc(url)}">
 <link rel="alternate" type="application/rss+xml" title="${esc(config.title)}" href="${esc(config.feedUrl)}">
 <link rel="icon" href="${assets['favicon-32.png']}" sizes="32x32" type="image/png">
+<link rel="icon" href="${assets['icon-192.png']}" sizes="192x192" type="image/png">
 <link rel="apple-touch-icon" href="${assets['apple-touch-icon.png']}">
 <link rel="manifest" href="${assets['site.webmanifest']}">
 <meta name="theme-color" content="#0b0b0f">
@@ -142,12 +191,19 @@ function layoutInner(ctx, page, content) {
 <meta name="kopon-art" content="${config.siteUrl}${assets['icon-512.png']}">
 <meta property="og:type" content="${page.ogType || 'website'}">
 <meta property="og:site_name" content="${esc(config.title)}">
+<meta property="og:locale" content="en_GB">
 <meta property="og:title" content="${esc(page.title || config.title)}">
 <meta property="og:description" content="${esc(desc)}">
 <meta property="og:url" content="${esc(url)}">
 <meta property="og:image" content="${esc(img)}">
-<meta name="twitter:card" content="summary_large_image">
-${page.noindex ? '<meta name="robots" content="noindex">\n' : ''}<link rel="preconnect" href="https://fonts.googleapis.com">
+${page.image ? '' : '<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n'}<meta property="og:image:alt" content="${esc(imgAlt)}">
+${page.published ? `<meta property="article:published_time" content="${esc(page.published)}">\n` : ''}<meta name="twitter:card" content="${page.image ? 'summary' : 'summary_large_image'}">
+<meta name="twitter:title" content="${esc(page.title || config.title)}">
+<meta name="twitter:description" content="${esc(desc)}">
+<meta name="twitter:image" content="${esc(img)}">
+<meta name="author" content="${esc(config.author)}">
+${page.noindex ? '<meta name="robots" content="noindex">' : '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">'}
+${ver.google ? `<meta name="google-site-verification" content="${esc(ver.google)}">\n` : ''}${ver.bing ? `<meta name="msvalidate.01" content="${esc(ver.bing)}">\n` : ''}<link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&amp;family=Inter:wght@400;500;600;700&amp;display=swap">
 <link rel="stylesheet" href="${assets['site.css']}">
@@ -192,8 +248,9 @@ const seriesLd = (config, show) => ({
   '@context': 'https://schema.org', '@type': 'PodcastSeries', '@id': `${config.siteUrl}/#podcast`,
   url: `${config.siteUrl}/`, name: config.title, alternateName: 'Kop On', description: config.description,
   image: show.image, webFeed: config.feedUrl, inLanguage: 'en', genre: ['Liverpool FC', 'Sports'],
-  author: { '@type': 'Person', name: config.author },
-  sameAs: [...config.listen.map((l) => l.url), config.patreon],
+  author: { '@type': 'Person', '@id': `${config.siteUrl}/#owen`, name: config.author },
+  publisher: { '@id': `${config.siteUrl}/#org` },
+  sameAs: [...new Set([...config.listen.map((l) => l.url), config.patreon, ...(config.sameAs || [])].filter(Boolean))],
 });
 
 export function homePage(ctx) {
@@ -201,6 +258,7 @@ export function homePage(ctx) {
   const latest = episodes[0];
   const titleClass = latest.title.length > 40 ? ' is-xlong' : latest.title.length > 22 ? ' is-long' : '';
   const homeNews = pickDiverse(news.items, 6, 2);
+  const firstYear = episodes.length ? String(episodes[episodes.length - 1].dateIso || '').slice(0, 4) : '';
 
   const content = `
 <section class="hero" aria-labelledby="hero-title">
@@ -220,7 +278,7 @@ ${listenLinks(config, true)}
 <p class="prev-link"><a href="/episodes/">Previous episodes →</a></p>
 </div>
 <div class="hero-art">
-<img class="art" src="${ctx.assets['logo.jpg']}" alt="Kop On! podcast logo" width="340" height="340" fetchpriority="high">
+${latest.art ? artImg(latest, 340, { alt: `Artwork for ${latest.title}`, lazy: false, priority: true }) : `<img class="art" src="${ctx.assets['logo.jpg']}" alt="Kop On! podcast logo" width="340" height="340" fetchpriority="high">`}
 ${latest.audio ? `${wave(latest, 48, `Seek within ${latest.title}`)}<div class="times"><span class="t-cur">0:00</span><span class="t-dur">${esc(clock(latest.durationSeconds))}</span></div><p class="resume-note" hidden></p>` : ''}
 </div>
 </div>
@@ -246,11 +304,17 @@ ${fansBand(ctx)}
 <a class="btn" href="${esc(config.patreon)}" rel="me noopener">Support on Patreon</a>
 </div>
 </div>
+</section>
+
+<section class="wrap about-band" aria-labelledby="about-h">
+<h2 id="about-h">About Kop On!</h2>
+<p>${esc(config.description)}</p>
+<p>Hosted by ${esc(config.author)}, with ${episodes.length} episodes${firstYear ? ` since ${firstYear}` : ''}. On this site you'll find <a href="/episodes/">every episode</a> with show notes, <a href="/news/">the latest LFC news</a>, <a href="/stats/">match previews and stats</a>, and the <a href="/fans/">fan zone</a>, where you can pick your Liverpool XI for the next match and rate the players after it.</p>
 </section>`;
 
   return layout(ctx, {
     path: '/', active: '/', news: true,
-    jsonLd: [seriesLd(config, show), { '@context': 'https://schema.org', '@type': 'WebSite', name: config.title, url: `${config.siteUrl}/` }],
+    jsonLd: [seriesLd(config, show), publisherLd(config, ctx.assets), { '@context': 'https://schema.org', '@type': 'WebSite', '@id': `${config.siteUrl}/#website`, name: 'Kop On!', alternateName: config.title, url: `${config.siteUrl}/`, inLanguage: 'en-GB', publisher: { '@id': `${config.siteUrl}/#org` } }],
   }, content);
 }
 
@@ -309,8 +373,13 @@ ${wave(ep, 64, `Seek within ${ep.title}`)}
 <div class="hero-glow" aria-hidden="true"></div>
 <div class="wrap ep-hero-inner">
 <p class="crumbs"><a href="/">Home</a> / <a href="/episodes/">Episodes</a></p>
+<div class="ep-hero-grid">
+<div class="ep-hero-copy">
 <p class="kicker">${metaBits}</p>
 <h1 id="ep-title">${esc(ep.title)}</h1>
+</div>
+${artImg(ep, 240, { cls: 'art ep-art', alt: ep.art ? `Artwork for ${ep.title}` : 'Kop On! podcast logo', lazy: false, priority: true })}
+</div>
 ${player}
 <div class="listen-row">${listenLinks(config, true)}</div>
 </div>
@@ -335,14 +404,17 @@ ${pn ? `<div class="pn">${pn}</div>` : ''}
     '@context': 'https://schema.org', '@type': 'PodcastEpisode', url, name: ep.title,
     datePublished: ep.dateIso, description: ep.excerpt,
     ...(ep.durationSeconds ? { timeRequired: `PT${Math.floor(ep.durationSeconds / 3600)}H${Math.floor((ep.durationSeconds % 3600) / 60)}M${ep.durationSeconds % 60}S` } : {}),
-    ...(ep.audio ? { associatedMedia: { '@type': 'MediaObject', contentUrl: ep.audio.url, encodingFormat: ep.audio.type } } : {}),
-    ...(ep.season && ep.number ? { episodeNumber: ep.number } : {}),
-    image: ep.image,
+    ...(ep.audio ? { associatedMedia: { '@type': 'MediaObject', contentUrl: ep.audio.url, encodingFormat: ep.audio.type, ...(ep.durationSeconds ? { duration: `PT${Math.floor(ep.durationSeconds / 3600)}H${Math.floor((ep.durationSeconds % 3600) / 60)}M${ep.durationSeconds % 60}S` } : {}) } } : {}),
+    ...(ep.number ? { episodeNumber: ep.number } : {}),
+    ...(ep.season ? { partOfSeason: { '@type': 'PodcastSeason', seasonNumber: ep.season, partOfSeries: { '@id': `${config.siteUrl}/#podcast` } } } : {}),
+    image: ep.image, inLanguage: 'en-GB',
+    author: { '@type': 'Person', '@id': `${config.siteUrl}/#owen`, name: config.author },
+    publisher: { '@type': 'Organization', '@id': `${config.siteUrl}/#org`, name: 'Kop On!' },
     partOfSeries: { '@type': 'PodcastSeries', '@id': `${config.siteUrl}/#podcast`, name: config.title, url: `${config.siteUrl}/` },
   };
   return layout(ctx, {
     path: epUrl(ep), active: '/episodes/', title: ep.title, description: ep.excerpt || config.description,
-    image: ep.image, ogType: 'article', jsonLd: [ld],
+    image: ep.image, imageAlt: `Artwork for ${ep.title}`, published: ep.dateIso, ogType: 'article', jsonLd: [ld],
   }, content);
 }
 

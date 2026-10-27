@@ -22,6 +22,17 @@ export default {
   ],
   patreon: 'https://patreon.com/koponpodcast',
 
+  // ── Search engines ──────────────────────────────────────────────────────
+  // Added to the end of every page title (search results show it)
+  titleSuffix: 'Kop On! LFC podcast',
+  // Other places Kop On! lives online: tells search engines they're all the same show
+  sameAs: ['https://www.facebook.com/koponliverpoolfcpodcast'],
+  // Search engine verification codes (only the part inside content="…"), if you ever need them:
+  //   verification: { google: 'abc123', bing: 'ABC123' },
+  verification: {},
+  // Tell Bing & co. about new pages straight after each build (IndexNow). false to turn off.
+  indexNow: true,
+
   // Text in show notes after which listing excerpts stop (boilerplate)
   excerptStopMarkers: ['YNWA!! KOP ON YOUTUBE', 'KOP ON YOUTUBE', '“Kop On!” is a podcast'],
 

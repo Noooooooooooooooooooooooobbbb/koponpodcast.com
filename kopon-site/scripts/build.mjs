@@ -21,6 +21,8 @@ import * as T from '../src/templates.mjs';
 import { statsPage, previewPage } from '../src/stats-templates.mjs';
 import { fansHub, lineupPage, ratingsPage, fansJson, ratePath } from '../src/fans-templates.mjs';
 import { buildStats } from '../lib/stats/index.mjs';
+import { episodeArt } from '../lib/art.mjs';
+import { changedUrls } from '../lib/indexnow.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -270,6 +272,8 @@ export async function build(options = {}) {
     hide: config.youtube?.hideShorts || [],
   });
   for (const ep of episodes) ep.shorts = shortsBySlug.get(ep.slug) || [];
+  for (const ep of episodes) ep.art = episodeArt(ep, show);
+  T.setLogos(assets);
 
   const ownPhotos = await copyOwnPhotos(outDir, config, log);
   const stats = await loadStats(config, live, fetchImpl, env, builtAt, log, ownPhotos);
@@ -320,12 +324,16 @@ export async function build(options = {}) {
     ...previews.map((p) => [`/stats/${p.slug}/`, today]),
     ['/fans/', today], ['/fans/lineup/', today], ...ratePages.map((p) => [p, today]),
     ...config.rooms.map((r) => [`/community/${r.slug}/`, today]),
-    ...episodes.map((ep) => [`/episodes/${ep.slug}/`, ep.dateIso]),
+    ...episodes.map((ep) => [`/episodes/${ep.slug}/`, ep.dateIso, ep.art]),
   ];
-  await writeOut(outDir, 'sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map(([u, d]) => `  <url><loc>${esc(config.siteUrl + u)}</loc><lastmod>${d}</lastmod></url>`).join('\n')}\n</urlset>\n`);
+  const day = (d) => String(d || today).slice(0, 10);
+  // Episode artwork is listed too, so it can appear in image search
+  await writeOut(outDir, 'sitemap.xml', `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${urls.map(([u, d, img]) => `  <url><loc>${esc(config.siteUrl + u)}</loc><lastmod>${day(d)}</lastmod>${img ? `<image:image><image:loc>${esc(img)}</image:loc></image:image>` : ''}</url>`).join('\n')}\n</urlset>\n`);
   await writeOut(outDir, 'robots.txt', `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /editor/\nDisallow: /stats-cache.json\n\nSitemap: ${config.siteUrl}/sitemap.xml\n`);
   // Read by the scheduled checker to decide whether a rebuild is needed
-  await writeOut(outDir, 'site-status.json', JSON.stringify({ builtAt: builtAt.toISOString(), signature, count: episodes.length, latestGuid: episodes[0].guid, latestTitle: episodes[0].title, slugs: Object.fromEntries(episodes.map((e) => [e.guid, e.slug])), shortsFeedIds: shorts.feedIds, shorts: shorts.all, nextKickoff: stats.data && !stats.data.stale ? stats.data.nextKickoff || null : null, inPlay: stats.data && !stats.data.stale ? stats.data.inPlay || null : null }, null, 2));
+  // Pages for search engines to look at again (sent by the scheduled check once this build is live)
+  const indexNow = changedUrls({ siteUrl: config.siteUrl, live, episodes, everyBuild: ['/', '/episodes/', '/news/', '/stats/', ...previews.map((p) => `/stats/${p.slug}/`), '/fans/', '/fans/lineup/', ...ratePages] });
+  await writeOut(outDir, 'site-status.json', JSON.stringify({ builtAt: builtAt.toISOString(), indexNow, signature, count: episodes.length, latestGuid: episodes[0].guid, latestTitle: episodes[0].title, slugs: Object.fromEntries(episodes.map((e) => [e.guid, e.slug])), shortsFeedIds: shorts.feedIds, shorts: shorts.all, nextKickoff: stats.data && !stats.data.stale ? stats.data.nextKickoff || null : null, inPlay: stats.data && !stats.data.stale ? stats.data.inPlay || null : null }, null, 2));
 
   log(`  wrote ${episodes.length + 9 + config.rooms.length + previews.length + ratePages.length} pages to ${outDir}`);
   return { episodes, news, outDir, assets, stats: stats.data };

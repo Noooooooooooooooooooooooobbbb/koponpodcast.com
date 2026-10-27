@@ -23,7 +23,8 @@ export default async (req, context) => {
   }
   return handleEditor(req, {
     env: e,
-    loadNews: (edits) => fetchAllNews(siteConfig.news.sources, newsOptions(siteConfig, { edits, includeCandidates: true })),
+    // KOPON_NOW: a fixed "now", only ever set by the local preview and tests
+    loadNews: (edits) => fetchAllNews(siteConfig.news.sources, newsOptions(siteConfig, { edits, includeCandidates: true, ...(process.env.KOPON_NOW ? { now: process.env.KOPON_NOW } : {}) })),
   });
 };
 

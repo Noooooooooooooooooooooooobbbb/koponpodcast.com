@@ -54,9 +54,16 @@ export function decideRebuild(live, feed, { now = new Date(), maxAgeHours = 24 }
 }
 
 // The whole scheduled check, with every outside dependency injectable for tests.
-export async function runScheduledCheck({ feedUrl, siteUrl, hookUrl, fetchImpl = globalThis.fetch, parseFeed, shortsUrl = '', parseShorts = null, now = new Date(), maxAgeHours = 24, log = console.log }) {
+export async function runScheduledCheck({ feedUrl, siteUrl, hookUrl, fetchImpl = globalThis.fetch, parseFeed, shortsUrl = '', parseShorts = null, now = new Date(), maxAgeHours = 24, log = console.log, afterLive = null }) {
   if (!hookUrl) {
     log('BUILD_HOOK_URL is not set, so automatic rebuilds are off. See README: "Turn on automatic rebuilds".');
+    // still tell search engines about the build that's live
+    if (afterLive) {
+      try {
+        const res = await fetchImpl(`${siteUrl.replace(/\/+$/, '')}/site-status.json?t=${now.getTime()}`, { headers: { 'Cache-Control': 'no-cache' }, signal: AbortSignal.timeout(10000) });
+        if (res.ok) await afterLive(await res.json());
+      } catch { /* next time */ }
+    }
     return { rebuild: false, reason: 'No build hook configured' };
   }
   const get = async (url, as) => {
@@ -90,6 +97,9 @@ export async function runScheduledCheck({ feedUrl, siteUrl, hookUrl, fetchImpl =
     log(`Could not read site-status.json from ${siteUrl} (${err.message}); will try again next time.`);
     return { rebuild: false, reason: 'Live site status unavailable' };
   }
+
+  // e.g. tell search engines about the pages in the build that's live (once per build)
+  if (afterLive && live) { try { await afterLive(live); } catch (err) { log(`After-check step failed: ${err.message}`); } }
 
   const decision = decideRebuild(live, feed, { now, maxAgeHours });
   log(decision.reason);

@@ -71,7 +71,7 @@
     if ('mediaSession' in navigator && window.MediaMetadata) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: ep.title, artist: 'Kop On!', album: 'Kop On! A Liverpool FC podcast',
-        artwork: artUrl ? [{ src: artUrl, sizes: '512x512', type: 'image/png' }] : [],
+        artwork: ep.art512 ? [{ src: new URL(ep.art512, location.href).href, sizes: '512x512' }] : artUrl ? [{ src: artUrl, sizes: '512x512', type: 'image/png' }] : [],
       });
     }
     render();
@@ -204,6 +204,16 @@
 
     if (mini && current) {
       mini.classList.remove('has-error');
+      var mimg = mini.querySelector('.mini-inner > img');
+      if (mimg) {
+        if (!mimg.getAttribute('data-logo')) mimg.setAttribute('data-logo', mimg.getAttribute('src'));
+        var want = current.art || mimg.getAttribute('data-logo');
+        if (mimg.getAttribute('data-want') !== want) {
+          mimg.setAttribute('data-want', want);
+          mimg.onerror = function () { this.onerror = null; this.src = this.getAttribute('data-logo'); };
+          mimg.src = want;
+        }
+      }
       var title = mini.querySelector('.mini-title');
       if (title) { title.textContent = current.title; title.setAttribute('href', current.href); }
       var mt = mini.querySelector('.mini-time');

@@ -4,7 +4,9 @@ import siteConfig from '../../site.config.mjs';
 import topEdits from '../../content/top-stories.mjs';
 
 export default async () => {
-  const data = await fetchAllNews(siteConfig.news.sources, newsOptions(siteConfig, { edits: topEdits }));
+  // KOPON_NOW is only ever set by the local preview and tests (a fixed "now" for the test headlines)
+  const now = process.env.KOPON_NOW || undefined;
+  const data = await fetchAllNews(siteConfig.news.sources, newsOptions(siteConfig, { edits: topEdits, ...(now ? { now } : {}) }));
   const ok = data.items.length > 0;
   return new Response(JSON.stringify(data), {
     status: 200,
