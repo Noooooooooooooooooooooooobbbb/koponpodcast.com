@@ -9,6 +9,7 @@ podcast's RSS feed and runs on Netlify.
 - **Latest LFC news** (`/news/`): headlines from 13 sites (BBC Sport, the Guardian, the Athletic, the Liverpool Echo, This Is Anfield and more), with clickbait filtered out, refreshed automatically
 - **Top stories**: the five stories most sites are covering, each with a short summary, above the news on the home page and the news page. You can rewrite, hide or pin them at `/editor/`
 - **Stats** (`/stats/`): Liverpool's next five matches (each with a preview page: talking points, form, team news, season numbers, head to head and a match thread), recent results, the Premier League and Champions League tables, how Liverpool compare with every Premier League team (including xG), player stats and the league's top scorers
+- **Live match centre** (`/live/`): every Liverpool match as it happens (score, action, live stats and line-ups with faces), updating itself every 30 seconds, plus a LIVE strip on every page during matches
 - **Fan zone** (`/fans/`): visitors pick their XI for the next match on a pitch with the players' faces and compare it with the fans' combined XI, with a flip-out tab showing the opposition's predicted line-up. After each match they rate the players out of 10 and pick a player of the match, and you can publish Kop On's official ratings alongside
 - **Community** (`/community/`): forum rooms plus the episode threads
 - **YouTube Shorts**: clips from your channel appear automatically on the episode they were posted after
@@ -220,3 +221,20 @@ To add another profile (Instagram, X, TikTok…), put its address in `sameAs` in
 ## Episode artwork
 
 Each episode's own artwork (from the podcast feed) appears beside it on the home page, on its episode page, in the episodes list, in the mini player and on phone lock screens. Netlify's free Image CDN serves small, fast copies (`[images]` in `netlify.toml`). If an episode has no artwork of its own, or it can't be loaded, the Kop On! logo is shown instead.
+
+## Live match centre (/live/)
+
+During every Liverpool match (all competitions ESPN covers: Premier League, Champions League, domestic cups) the **Live** page shows:
+
+- the score and match clock, with scorers;
+- the latest action, written by the site from the match facts (goals and assists, cards, substitutions, VAR, half-time and full time), newest first, with Liverpool goals highlighted;
+- live stats (possession, shots, shots on target, corners, pass accuracy, passes, saves, fouls, offsides, cards, tackles, interceptions);
+- both line-ups on the pitch, with Liverpool players' faces, cards, goals and who came on and off.
+
+It updates by itself every 30 seconds, about a minute behind real time, with no rebuild needed. From 75 minutes before kick-off (line-ups usually arrive an hour before) to 4 hours after, a **LIVE strip** with the score appears under the menu on every page, and the "Live" menu item pulses red. Visitors can hide the strip for their visit. Outside match times the page shows the next match, and other pages don't contact the server at all.
+
+How it works: `netlify/functions/live.mjs` (at `/api/live`) reads ESPN's free match data and returns a small summary. Netlify's CDN shares one copy between all visitors (20 seconds during play), so ESPN is asked only about three times a minute however many people are watching, and it stays well within the free plan. If ESPN is unavailable, the page keeps the last score and says "live updates are paused" until it's back. Nothing needs setting up.
+
+The other football services aren't used for this: football-data.org's free plan has delayed scores and no line-ups, cards or stats, and API-Football's free plan doesn't cover the current season.
+
+To try it locally, run `node scripts/dev-server.mjs --fixtures`. The test fixture replays a real match (Liverpool 0–1 Arsenal) through the 8 November 2026 fixture: open `http://localhost:8899/__now?t=2026-11-08T17:50:00Z`, then `/live/`.

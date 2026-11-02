@@ -126,7 +126,7 @@ export function metaDescription(text, max = 155) {
 }
 
 // "Home › Episodes › Ron the Rattler!" for search results, from the page's address
-const SECTIONS = { episodes: 'Episodes', news: 'News', stats: 'Stats', fans: 'Fan zone', community: 'Community', lineup: 'Pick your XI' };
+const SECTIONS = { episodes: 'Episodes', news: 'News', live: 'Live', stats: 'Stats', fans: 'Fan zone', community: 'Community', lineup: 'Pick your XI' };
 export function breadcrumbLd(config, path, title) {
   const parts = path.split('/').filter(Boolean);
   if (!parts.length) return null;
@@ -160,7 +160,9 @@ function layoutInner(ctx, page, content) {
   const imgAlt = page.imageAlt || (page.image ? page.title || config.title : `${config.title}`);
   const crumbs = page.noindex || page.path === '/' ? null : breadcrumbLd(config, page.path, page.crumbTitle || page.title);
   const ver = config.verification || {};
-  const nav = [['Episodes', '/episodes/'], ['News', '/news/'], ['Stats', '/stats/'], ['Fan zone', '/fans/'], ['Community', '/community/']];
+  const nav = [['Episodes', '/episodes/'], ['News', '/news/'], ['Live', '/live/'], ['Stats', '/stats/'], ['Fan zone', '/fans/'], ['Community', '/community/']];
+  // kick-off times for the LIVE strip ("d:" = date only, time not fixed yet)
+  const kickoffs = (ctx.stats?.next || []).map((n) => (n.tbc ? `d:${new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date(n.date))}` : n.date)).filter(Boolean).join(',');
   const jsonLd = [...(page.jsonLd || []), ...(crumbs ? [crumbs] : [])].map((j) => `<script type="application/ld+json">${jsonForScript(j)}</script>`).join('\n');
   const scripts = [
     `<script src="${assets['player.js']}" defer></script>`,
@@ -171,6 +173,8 @@ function layoutInner(ctx, page, content) {
     page.stats ? `<script src="${assets['stats.js']}" defer></script>` : '',
     page.fans === 'lineup' ? `<script type="module" src="${assets['lineup.js']}"></script>` : '',
     page.fans === 'ratings' ? `<script type="module" src="${assets['ratings.js']}"></script>` : '',
+    page.live ? `<script type="module" src="${assets['live.js']}"></script>` : '',
+    !page.live && kickoffs && assets['live-strip.js'] ? `<script type="module" src="${assets['live-strip.js']}"></script>` : '',
   ].join('');
 
   return `<!doctype html>
@@ -189,6 +193,7 @@ function layoutInner(ctx, page, content) {
 <meta name="theme-color" content="#0b0b0f">
 <meta name="color-scheme" content="dark">
 <meta name="kopon-art" content="${config.siteUrl}${assets['icon-512.png']}">
+${kickoffs ? `<meta name="kopon-kickoffs" content="${esc(kickoffs)}">` : ''}
 <meta property="og:type" content="${page.ogType || 'website'}">
 <meta property="og:site_name" content="${esc(config.title)}">
 <meta property="og:locale" content="en_GB">

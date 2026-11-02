@@ -20,6 +20,7 @@ import { newsOptions } from '../lib/news.mjs';
 import * as T from '../src/templates.mjs';
 import { statsPage, previewPage } from '../src/stats-templates.mjs';
 import { fansHub, lineupPage, ratingsPage, fansJson, ratePath } from '../src/fans-templates.mjs';
+import { livePage } from '../src/live-templates.mjs';
 import { buildStats } from '../lib/stats/index.mjs';
 import { episodeArt } from '../lib/art.mjs';
 import { changedUrls } from '../lib/indexnow.mjs';
@@ -72,7 +73,7 @@ async function buildAssets(outDir, config) {
     assets[name] = `/assets/${name}?v=${hash(buf)}`;
   }
   // modules before the files that import them (their addresses carry a version)
-  for (const name of ['site.css', 'player.js', 'search.js', 'comments.js', 'editor.js', 'stats.js', 'news-render.js', 'news.js', 'fans-core.js', 'fans-ui.js', 'lineup.js', 'ratings.js']) {
+  for (const name of ['site.css', 'player.js', 'search.js', 'comments.js', 'editor.js', 'stats.js', 'news-render.js', 'news.js', 'fans-core.js', 'fans-ui.js', 'lineup.js', 'ratings.js', 'live-core.js', 'live.js', 'live-strip.js']) {
     let text = await readFile(join(srcDir, name), 'utf8');
     text = text.replace(/from '\.\/([\w-]+\.js)'/g, (m, dep) => (assets[dep] ? `from '${assets[dep]}'` : m));
     await writeFile(join(outDir, 'assets', name), text);
@@ -312,6 +313,7 @@ export async function build(options = {}) {
     await writeOut(outDir, 'data/fans.json', fansJson(plain));
     ratePages = [];
   }
+  await writeOut(outDir, 'live/index.html', livePage(ctx));
   await writeOut(outDir, '404.html', T.notFoundPage(ctx));
   await writeOut(outDir, 'editor/index.html', T.editorPage(ctx));
 
@@ -320,7 +322,7 @@ export async function build(options = {}) {
 
   const today = builtAt.toISOString().slice(0, 10);
   const urls = [
-    ['/', episodes[0].dateIso], ['/episodes/', episodes[0].dateIso], ['/news/', today], ['/stats/', today], ['/community/', today],
+    ['/', episodes[0].dateIso], ['/episodes/', episodes[0].dateIso], ['/news/', today], ['/live/', today], ['/stats/', today], ['/community/', today],
     ...previews.map((p) => [`/stats/${p.slug}/`, today]),
     ['/fans/', today], ['/fans/lineup/', today], ...ratePages.map((p) => [p, today]),
     ...config.rooms.map((r) => [`/community/${r.slug}/`, today]),
@@ -332,7 +334,7 @@ export async function build(options = {}) {
   await writeOut(outDir, 'robots.txt', `User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /editor/\nDisallow: /stats-cache.json\n\nSitemap: ${config.siteUrl}/sitemap.xml\n`);
   // Read by the scheduled checker to decide whether a rebuild is needed
   // Pages for search engines to look at again (sent by the scheduled check once this build is live)
-  const indexNow = changedUrls({ siteUrl: config.siteUrl, live, episodes, everyBuild: ['/', '/episodes/', '/news/', '/stats/', ...previews.map((p) => `/stats/${p.slug}/`), '/fans/', '/fans/lineup/', ...ratePages] });
+  const indexNow = changedUrls({ siteUrl: config.siteUrl, live, episodes, everyBuild: ['/', '/episodes/', '/news/', '/live/', '/stats/', ...previews.map((p) => `/stats/${p.slug}/`), '/fans/', '/fans/lineup/', ...ratePages] });
   await writeOut(outDir, 'site-status.json', JSON.stringify({ builtAt: builtAt.toISOString(), indexNow, signature, count: episodes.length, latestGuid: episodes[0].guid, latestTitle: episodes[0].title, slugs: Object.fromEntries(episodes.map((e) => [e.guid, e.slug])), shortsFeedIds: shorts.feedIds, shorts: shorts.all, nextKickoff: stats.data && !stats.data.stale ? stats.data.nextKickoff || null : null, inPlay: stats.data && !stats.data.stale ? stats.data.inPlay || null : null }, null, 2));
 
   log(`  wrote ${episodes.length + 9 + config.rooms.length + previews.length + ratePages.length} pages to ${outDir}`);

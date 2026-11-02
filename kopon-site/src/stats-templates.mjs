@@ -296,6 +296,7 @@ export function previewPage(ctx, p) {
 </div>
 <div class="wrap preview">
 ${ctx.stats?.fans?.lineup?.matchId === p.id ? `<p class="fz-band fz-inline"><span class="kicker">Fan zone</span><a href="/fans/lineup/">Pick your XI for this match →</a></p>` : ''}
+${ctx.stats?.next?.[0]?.id === p.id ? `<p class="fz-band fz-inline"><span class="kicker">Live</span><a href="/live/">Follow this match live: score, action and stats →</a></p>` : ''}
 ${p.points?.length ? `<section class="block first" aria-labelledby="tp-h"><h2 class="h2" id="tp-h">Talking points</h2><ul class="points">${p.points.map((t) => `<li>${esc(t)}</li>`).join('')}</ul></section>` : ''}
 ${p.error ? '<p class="stats-empty">Some of the numbers for this match could not be fetched; they will appear after the next update.</p>' : ''}
 <section class="block" aria-labelledby="form-h"><h2 class="h2" id="form-h">Form</h2><p class="fine">Last five matches, most recent first, all competitions.</p>

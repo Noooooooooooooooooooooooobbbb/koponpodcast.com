@@ -61,6 +61,10 @@ const newsFn = (await import(pathToFileURL(join(ROOT, 'netlify/functions/news.mj
 const editorFn = (await import(pathToFileURL(join(ROOT, 'netlify/functions/editor.mjs')).href)).default;
 process.env.KOPON_STORE_DIR ||= join(ROOT, '.fans-store'); // votes go in a local folder, not Netlify
 const fansFn = (await import(pathToFileURL(join(ROOT, 'netlify/functions/fans.mjs')).href)).default;
+const { handleLive } = await import(pathToFileURL(join(ROOT, 'netlify/functions/live.mjs')).href);
+// with --fixtures, the live match is a replay of a real match (test/fixtures/live-fixtures.mjs)
+const liveFixture = flag('--fixtures') ? await import(pathToFileURL(join(ROOT, 'test/fixtures/live-fixtures.mjs')).href) : null;
+const nowish = () => (process.env.KOPON_NOW ? new Date(process.env.KOPON_NOW) : new Date());
 
 async function sendFile(req, res, file, status = 200) {
   const info = await stat(file);
@@ -96,6 +100,13 @@ const server = createServer(async (req, res) => {
       const chunks = [];
       for await (const c of req) chunks.push(c);
       const r = await editorFn(new Request(url, { method: req.method, headers: { 'Content-Type': 'application/json', 'x-forwarded-for': req.headers['x-forwarded-for'] || req.socket.remoteAddress || '' }, body: req.method === 'POST' ? Buffer.concat(chunks) : undefined }), null);
+      res.writeHead(r.status, Object.fromEntries(r.headers));
+      return res.end(await r.text());
+    }
+    if (url.pathname === '/api/live') {
+      const { _resetLiveCache } = await import(pathToFileURL(join(ROOT, 'lib/live.mjs')).href);
+      _resetLiveCache(); // the preview's clock can jump about
+      const r = await handleLive(new Request(url), { now: nowish(), ...(liveFixture ? { fetchImpl: liveFixture.liveFetch(nowish) } : {}) });
       res.writeHead(r.status, Object.fromEntries(r.headers));
       return res.end(await r.text());
     }

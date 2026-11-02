@@ -263,3 +263,5 @@ export function statsFetch({ failFd = false, failAf = false, afRemaining = 90 } 
   };
 }
 export const TEST_NOW = new Date(NOW);
+// every pretend match (for the live match replay)
+export const fixtureEvents = () => events.map((e) => ({ id: e.id, date: e.date, slug: e._slug, home: e._h, away: e._a }));

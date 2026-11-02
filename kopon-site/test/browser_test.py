@@ -120,7 +120,7 @@ def main():
         print('\n== Static HTML: every page in the sitemap ==')
         st, sm = get('/sitemap.xml')
         paths = [re.sub(r'^https?://[^/]+', '', u) for u in re.findall(r'<loc>([^<]+)</loc>', sm)]
-        check(st == 200 and len(paths) == 50 + 8 + 5 + 7, f'sitemap lists {len(paths)} URLs')
+        check(st == 200 and len(paths) == 50 + 9 + 5 + 7, f'sitemap lists {len(paths)} URLs')
         old = (ROOT / 'test/fixtures/old-sitemap.xml').read_text()
         old_paths = [re.sub(r'^https?://[^/]+', '', u) for u in re.findall(r'<loc>([^<]+)</loc>', old)]
         missing = [p for p in old_paths if p not in paths]
@@ -152,7 +152,7 @@ def main():
             browser = pw.chromium.launch(args=['--autoplay-policy=no-user-gesture-required'])
 
             print('\n== Layout, contrast and errors (desktop + phone) ==')
-            sample = ['/', '/episodes/', '/episodes/rio-the-hero/', '/episodes/iraola-s-interview-pt-3-and-darwin-to-return/', '/news/', '/community/', '/community/the-terrace/', '/stats/', '/stats/2026-10-25-brighton/', '/stats/2026-10-28-real-madrid/', '/fans/', '/fans/lineup/', '/fans/ratings/2026-10-21-villarreal/', '/missing/']
+            sample = ['/', '/episodes/', '/episodes/rio-the-hero/', '/episodes/iraola-s-interview-pt-3-and-darwin-to-return/', '/news/', '/community/', '/community/the-terrace/', '/stats/', '/stats/2026-10-25-brighton/', '/stats/2026-10-28-real-madrid/', '/fans/', '/fans/lineup/', '/fans/ratings/2026-10-21-villarreal/', '/live/', '/missing/']
             for w in (1280, 390):
                 ctx = browser.new_context(viewport={'width': w, 'height': 900})
                 page = ctx.new_page()
@@ -365,6 +365,7 @@ def main():
 
             print('\n== News ==')
             page = browser.new_page()
+            page.clock.set_fixed_time(FAN_NOW)  # the test headlines are from late October 2026
             page.goto(BASE + '/', wait_until='networkidle')
             page.wait_for_selector('[data-news-live="true"]', timeout=5000)
             srcs = page.eval_on_selector_all('.home-news .news-src', 'els => els.map(e => e.textContent)')
@@ -826,6 +827,83 @@ def main():
             check('href="/fans/lineup/"' in get('/')[1] and 'Pick your XI for this match' in get('/stats/2026-10-25-brighton/')[1] and 'Pick your XI' not in get('/stats/2026-10-28-real-madrid/')[1], 'linked from the home page and the next match preview')
             fj = json.loads(get('/data/fans.json')[1])
             check(fj['lineup']['matchId'] == '700090' and len(fj['lineup']['squad']) == 22 and len(fj['rate']) == 5, 'data/fans.json tells the voting function what is open')
+            print('\n== Live match centre ==')
+            # a replay of a real match (Liverpool 0–1 Arsenal) through the 8 November fixture
+            from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+            KO = _dt(2026, 11, 8, 17, 30, tzinfo=_tz.utc)
+            iso = lambda mins: (KO + _td(minutes=mins)).strftime('%Y-%m-%dT%H:%M:%SZ')
+            setnow = lambda mins: get('/__now?t=' + iso(mins))
+            def until(js, secs=10):
+                for _ in range(int(secs * 5)):
+                    if page.evaluate(js): return True
+                    page.wait_for_timeout(200)
+                return False
+            try:
+                setnow(20.5)
+                # a clock the test can move on, so the page's own 30-second check runs as in a real match
+                ctx = browser.new_context(viewport={'width': 1280, 'height': 900}); page = ctx.new_page(); errs = []
+                ctx.route(re.compile(r'https://(a\.espncdn\.com|images\.fotmob\.com|upload\.wikimedia\.org)/.*'), lambda r: r.fulfill(status=404, body=''))
+                page.on('pageerror', lambda e: errs.append(str(e)))
+                page.clock.install(time=iso(20.5))
+                page.goto(BASE + '/live/', wait_until='domcontentloaded'); page.wait_for_selector('.lv-num', timeout=8000)
+                bd = page.inner_text('#lv-board')
+                check('Liverpool' in bd and 'Arsenal' in bd and page.inner_text('#lv-h') == '0' and page.inner_text('#lv-a') == '1' and "21'" in bd and 'Havertz 16' in bd, f'live: score, clock and scorer ({bd[:80]!r})')
+                check('GOAL!' in page.inner_text('#lv-feed') and 'set up by Declan Rice' in page.inner_text('#lv-feed') and page.locator('.lv-ev').first.inner_text().startswith("16'"), 'live: the goal in the action feed, newest first')
+                check(page.locator('.lv-stats tbody tr').count() >= 10 and 'Possession' in page.inner_text('#lv-stats'), 'live: match stats')
+                check(page.locator('#lv-xi .spot').count() == 11 and 'ISAK' in page.inner_text('#lv-xi').upper(), "live: Liverpool's line-up on the pitch")
+                page.click('#lv-tabs [data-side="away"]')
+                check('RAYA' in page.inner_text('#lv-xi').upper() and page.get_attribute('#lv-tabs [data-side="away"]', 'aria-pressed') == 'true', "live: switch to Arsenal's line-up")
+                page.click('#lv-tabs [data-side="home"]')
+                check(page.title() == "Liverpool 0–1 Arsenal (21') | Kop On! live", f'live: the score in the browser tab ({page.title()})')
+                # the page checks again by itself: half-time
+                setnow(55); page.clock.fast_forward('00:31'); until("document.getElementById('lv-board').innerText.toLowerCase().includes('half-time')")
+                newest = page.locator('.lv-ev').first
+                check('half-time' in newest.inner_text().lower() and 'is-new' in (newest.get_attribute('class') or '') and 'Half-time' in page.text_content('#lv-live'), 'live: half-time arrives by itself, highlighted and announced to screen readers')
+                # 82 minutes: substitutions on the pitch and the bench
+                setnow(100); page.clock.fast_forward('00:31'); until("document.getElementById('lv-board').innerText.includes(\"82'\")")
+                check(page.locator('#lv-xi .lv-was').count() == 5 and '↓59' in page.inner_text('#lv-xi') and 'came on 59' in page.inner_text('#lv-xi'), 'live: who has been substituted, and who came on')
+                check(page.locator('.lv-ev').count() == 10 and page.is_visible('#lv-more'), 'live: the latest 10 moments, with a "Show all" button')
+                page.click('#lv-more'); check(page.locator('.lv-ev').count() == 16 and not page.is_visible('#lv-more'), 'live: "Show all" shows every moment')
+                # ESPN goes quiet: the last score stays, with a calm message
+                page.route('**/api/live', lambda r: r.fulfill(status=503, body='down'))
+                page.clock.fast_forward('00:31'); until("!document.getElementById('lv-note').hidden")
+                check('paused' in page.inner_text('#lv-note') and page.inner_text('#lv-a') == '1', 'live: a feed outage keeps the last score and says updates are paused')
+                page.unroute('**/api/live')
+                setnow(130); page.clock.fast_forward('01:00'); until("document.getElementById('lv-board').innerText.toLowerCase().includes('full time')")
+                check(page.is_hidden('#lv-note') and 'Rate the players' in page.inner_text('#lv-board') and 'full time' in page.locator('.lv-ev').first.inner_text().lower(), 'live: full time, with a link to rate the players')
+                check(not errs, 'live: no JavaScript errors', str(errs[:2]))
+                ctx.close()
+                # the LIVE strip on other pages, only around kick-off
+                setnow(20.5)
+                ctx = fan_context(browser, 390, 844, when=iso(20.5)); page = ctx.new_page()
+                page.goto(BASE + '/', wait_until='networkidle'); page.wait_for_selector('.live-strip', timeout=8000)
+                st = page.inner_text('.live-strip')
+                check('LIVE' in st.upper() and '0–1' in st and "21'" in st and page.get_attribute('.live-strip a', 'href') == '/live/', f'strip: live score on every page ({st!r})')
+                check(page.evaluate("!!document.querySelector('.site-nav a.is-live')") and page.evaluate("document.documentElement.scrollWidth <= innerWidth"), 'strip: the Live menu item pulses; fits a phone')
+                page.click('.ls-close'); page.goto(BASE + '/episodes/', wait_until='networkidle'); page.wait_for_timeout(500)
+                check(page.locator('.live-strip').count() == 0, 'strip: hidden for the rest of the visit once closed')
+                ctx.close()
+                setnow(-200)  # far from any kick-off: nobody asks the server
+                ctx = fan_context(browser, 1280, 900, when='2026-11-06T12:00:00Z'); page = ctx.new_page(); asked = []
+                page.on('request', lambda r: asked.append(r.url) if '/api/live' in r.url else None)
+                page.goto(BASE + '/', wait_until='networkidle'); page.wait_for_timeout(500)
+                check(not asked and page.locator('.live-strip').count() == 0, 'strip: no match near, no requests at all')
+                page.goto(BASE + '/live/', wait_until='networkidle'); page.wait_for_timeout(500)
+                q = page.inner_text('#lv-board')
+                check('no liverpool match on right now' in q.lower() and 'Arsenal' in q and page.is_hidden('#lv-action'), f'live page with no match on: shows the next one ({q[:90]!r})')
+                ctx.close()
+                # phone: a match in progress fits the screen
+                setnow(100)
+                ctx = fan_context(browser, 390, 844, when=iso(100)); page = ctx.new_page()
+                page.goto(BASE + '/live/', wait_until='networkidle'); page.wait_for_selector('.lv-num', timeout=8000)
+                check(page.evaluate("document.documentElement.scrollWidth <= innerWidth") and page.locator('#lv-xi .spot').count() == 11, 'live @390: no sideways scrolling, line-up on the pitch')
+                page.screenshot(path=str(SHOTS / 'live_82min_390.png'), full_page=True)
+                ctx.close()
+                lp = get('/live/')[1]
+                check('<h1 class="page-title">Live match centre</h1>' in lp and 'href="/live/" aria-current="page"' in lp and '/live/' in get('/sitemap.xml')[1] and 'Follow this match live' in get('/stats/2026-10-25-brighton/')[1], 'live page: in the menu, the sitemap and the next match preview')
+            finally:
+                get('/__now?t=' + FAN_NOW)
+
             print('\n== Hostile feed (XSS) ==')
             build('--feed', 'nasty-podcast.xml')
             page = browser.new_page(); dialogs = []; errs = []
