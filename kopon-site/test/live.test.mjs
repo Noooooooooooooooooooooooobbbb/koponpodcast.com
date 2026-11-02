@@ -25,7 +25,14 @@ test('live: every kind of moment is recognised; injury stoppages are left out', 
   assert.equal(eventKind(K('kickoff', 'Kickoff')), 'kickoff');
   assert.equal(eventKind(K('halftime', 'Halftime')), 'ht');
   assert.equal(eventKind(K('start-2nd-half', 'Start 2nd Half')), '2h');
-  assert.equal(eventKind(K('end-regular-time', 'End Regular Time')), 'end');
+  assert.equal(eventKind(K('end-regular-time', 'End Regular Time')), 'end-90');
+  assert.equal(eventKind(K('start-extra-time', 'Start Extra Time')), 'et');
+  assert.equal(eventKind(K('halftime-extra-time', 'Halftime Extra Time')), 'et-ht');
+  assert.equal(eventKind(K('start-2nd-half-extra-time', 'Start 2nd Half Extra Time')), 'et-2h');
+  assert.equal(eventKind(K('end-extra-time', 'End Extra Time')), 'end-et');
+  assert.equal(eventKind(K('start-shootout', 'Start Shootout')), 'shootout');
+  assert.equal(eventKind(K('end-match', 'End Match')), 'end');
+  assert.equal(eventKind(K('penalty---hit-woodwork', 'Penalty - Hit Woodwork')), 'pen-miss');
   assert.equal(eventKind(K('start-delay', 'Start Delay')), null);
   assert.equal(eventKind(K('end-delay', 'End Delay')), null);
   assert.equal(eventKind(K('something-new', 'Something New')), null, 'unknown kinds are skipped, not shown wrongly');
@@ -164,7 +171,7 @@ test('live: the action in our own words, newest first, safe from odd names', () 
   assert.deepEqual(say(by('sub'), m), { title: 'Substitution, Liverpool', text: 'Dominik Szoboszlai comes on for Trey Nyoni.' });
   assert.deepEqual(say(by('yellow'), m), { title: 'Yellow card', text: 'Bradley Barcola (Liverpool)' });
   assert.deepEqual(say(by('ht'), m), { title: 'Half-time', text: 'Liverpool 0–1 Arsenal' });
-  assert.deepEqual(say(by('end'), m), { title: 'Full time', text: 'Liverpool 0–1 Arsenal' });
+  assert.deepEqual(say(by('end-90'), m), { title: 'Full time', text: 'Liverpool 0–1 Arsenal' });
   assert.equal(say({ kind: 'red', team: 'home', player: 'X' }, m).text, 'X (Liverpool) is sent off.');
   assert.equal(say({ kind: 'var', note: 'goal disallowed' }, m).text, 'Goal disallowed.');
   const html = feedHtml(m, { ours: 'home', fresh: new Set([by('goal').id]) });
@@ -201,4 +208,68 @@ test('live: a penalty shoot-out is shown, but its kicks are not counted as goals
   assert.deepEqual(L.events[1].score, [1, 1], 'running score still adds up (shoot-out kicks not counted)');
   assert.deepEqual(L.pens, [4, 3]);
   assert.equal(say(L.events[3], L).text, 'Cole Palmer (Chelsea) misses.');
+});
+
+// Real matches with the awkward cases (trimmed ESPN data, facts only)
+import { readFileSync as _rf } from 'node:fs';
+import { clockWords } from '../src/assets/live-core.js';
+const CASES = JSON.parse(_rf(new URL('./fixtures/live-cases.json', import.meta.url), 'utf8'));
+const lines = (m) => m.events.filter((e) => !['sub', 'yellow'].includes(e.kind)).map((e) => { const d = say(e, m); return `${e.min} ${d.title}: ${d.text}`.trim(); });
+
+test('live (real matches): an own goal names the player\'s own club; the woodwork penalty is shown', () => {
+  let m = withHalfTimeScore(liveSummary(CASES.ownGoal));
+  assert.ok(lines(m).includes("82' Own goal: Axel Disasi (West Ham) puts it into his own net. Liverpool 5–2 West Ham"));
+  assert.deepEqual(m.lineups.away, null, 'no line-ups in this trimmed copy: handled');
+  m = withHalfTimeScore(liveSummary(CASES.woodwork));
+  assert.ok(lines(m).includes("32' Penalty missed: Dominik Szoboszlai (Liverpool) fails to score from the spot."));
+  assert.equal(eventKind({ type: { type: 'penalty---awarded', text: 'Penalty - Awarded' } }), null, 'an awarded penalty is not a miss');
+});
+
+test('live (real matches): extra time, with the score at each whistle', () => {
+  const m = withHalfTimeScore(liveSummary(CASES.et));
+  const L = lines(m);
+  assert.ok(L.includes("90+5' End of normal time: West Ham 1–1 QPR"), 'the score then, not the final score');
+  assert.ok(L.includes("105+3' Extra-time break: West Ham 2–1 QPR"));
+  assert.ok(L.includes("105' Extra time: The second half of extra time is under way."));
+  assert.ok(L.includes("120+2' Full time, after extra time: West Ham 2–1 QPR"));
+  assert.equal(L.filter((x) => /Full time/.test(x)).length, 1, 'one full-time line');
+  assert.equal(L.filter((x) => /Half-time/.test(x)).length, 1);
+  assert.deepEqual([clockLabel(m), clockWords(m)], ['AET', 'After extra time']);
+});
+
+test('live (real matches): Liverpool win on penalties', () => {
+  const m = withHalfTimeScore(liveSummary(CASES.pens));
+  const L = lines(m);
+  assert.deepEqual(m.pens, [6, 5]);
+  assert.ok(L.includes("90+4' End of normal time: Liverpool 1–1 Chelsea"));
+  assert.ok(L.includes("104' Full time, after penalties: Liverpool 1–1 Chelsea. Liverpool win 6–5 on penalties."));
+  assert.deepEqual([clockLabel(m), clockWords(m)], ['Pens', 'After penalties']);
+});
+
+test('live: an abandoned or postponed match is never shown as a 0–0 result', () => {
+  const sum = { header: { competitions: [{ status: { type: { name: 'STATUS_POSTPONED', state: 'post', description: 'Postponed', shortDetail: 'Postponed' } }, competitors: [{ homeAway: 'home', team: { id: '364', displayName: 'Liverpool' } }, { homeAway: 'away', team: { id: '2', displayName: 'Everton' } }] }] }, keyEvents: [] };
+  const m = liveSummary(sum);
+  assert.equal(m.postponed, true); assert.equal(m.home.score, null); assert.equal(clockLabel(m), 'Postponed');
+  // extra-time break while it's happening
+  const et = liveSummary({ header: { competitions: [{ status: { period: 3, displayClock: "105'", type: { name: 'STATUS_HALFTIME_ET', state: 'in', description: 'Halftime Extra Time', shortDetail: 'HT-ET' } }, competitors: [{ homeAway: 'home', score: '1', team: { id: '1' } }, { homeAway: 'away', score: '1', team: { id: '2' } }] }] } });
+  assert.deepEqual([clockLabel(et), clockWords(et)], ['ET HT', 'Extra-time break']);
+});
+
+test('live: pages built during or just after a match still carry its kick-off (the LIVE strip stays)', async () => {
+  const { layout } = await import('../src/templates.mjs');
+  const { default: config } = await import('../site.config.mjs');
+  const assets = new Proxy({}, { get: (_, k) => `/assets/${String(k)}` });
+  const ctx = (builtAt, stats) => ({ config, assets, comments: { provider: 'none' }, builtAt: new Date(builtAt), stats });
+  const meta = (html) => (html.match(/name="kopon-kickoffs" content="([^"]*)"/) || [])[1] || '';
+  const next = [{ date: '2026-11-12T19:45Z' }, { date: '2026-11-15T15:00Z', tbc: true }];
+  // built at 18:15, 45 min into a match: it's no longer "upcoming"
+  let html = layout(ctx('2026-11-08T18:15:00Z', { inPlay: '2026-11-08T17:30Z', results: [], next }), { path: '/x/', title: 'X' }, '');
+  assert.equal(meta(html), '2026-11-08T17:30Z,2026-11-12T19:45Z,d:2026-11-15');
+  assert.match(html, /live-strip\.js/);
+  // built after the final whistle: the result stays in the list for 4 hours after kick-off
+  html = layout(ctx('2026-11-08T19:45:00Z', { results: [{ date: '2026-11-08T17:30Z' }, { date: '2026-11-01T16:30Z' }], next: [] }), { path: '/x/', title: 'X' }, '');
+  assert.equal(meta(html), '2026-11-08T17:30Z', 'the result, but not last week\'s');
+  html = layout(ctx('2026-11-08T22:00:00Z', { results: [{ date: '2026-11-08T17:30Z' }], next: [] }), { path: '/x/', title: 'X' }, '');
+  assert.equal(meta(html), '', 'over 4 hours later: no strip at all');
+  assert.doesNotMatch(html, /live-strip\.js/);
 });

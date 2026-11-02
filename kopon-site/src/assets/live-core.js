@@ -8,8 +8,16 @@ const scoreLine = (m, sc) => (sc ? `${teamName(m, 'home')} ${sc[0]}–${sc[1]} $
 
 /** One moment of the match as text: { title, text } (plain text; escape before use in HTML) */
 export function describe(e, m) {
-  const t = teamName(m, e.team);
+  // an own goal is listed under the side that benefits: the player is from the other side
+  const other = (s) => (s === 'home' ? 'away' : s === 'away' ? 'home' : null);
+  const side = e.kind === 'own-goal' ? (e.for ? other(e.for) : other(e.team)) : e.team;
+  const t = teamName(m, side);
   const who = (p) => (p ? `${p}${t ? ` (${t})` : ''}` : t);
+  const pensLine = () => {
+    if (!m.pens) return '';
+    const [h, a] = m.pens, win = h > a ? 'home' : a > h ? 'away' : null;
+    return win ? ` ${teamName(m, win)} win ${Math.max(h, a)}–${Math.min(h, a)} on penalties.` : '';
+  };
   switch (e.kind) {
     case 'goal': return { title: 'GOAL!', text: `${who(e.player)}${e.assist ? `, set up by ${e.assist}` : ''}.${e.score ? ` ${scoreLine(m, e.score)}` : ''}` };
     case 'pen-goal': return { title: 'GOAL! Penalty', text: `${who(e.player)} scores from the spot.${e.score ? ` ${scoreLine(m, e.score)}` : ''}` };
@@ -22,27 +30,36 @@ export function describe(e, m) {
     case 'var': return { title: 'VAR', text: e.note ? `${e.note[0].toUpperCase()}${e.note.slice(1)}.` : 'Check under way.' };
     case 'kickoff': return { title: 'Kick-off', text: "We're under way." };
     case 'ht': return { title: 'Half-time', text: e.score ? scoreLine(m, e.score) : 'The players head in at the break.' };
-    case '2h': return { title: 'Second half', text: "The second half is under way." };
+    case '2h': return { title: 'Second half', text: 'The second half is under way.' };
     case 'et': return { title: 'Extra time', text: 'Extra time is under way.' };
+    case 'et-ht': return { title: 'Extra-time break', text: e.score ? scoreLine(m, e.score) : 'A short break before the second half of extra time.' };
+    case 'et-2h': return { title: 'Extra time', text: 'The second half of extra time is under way.' };
     case 'shootout': return { title: 'Penalties', text: "It's going to a penalty shoot-out." };
+    case 'end-90': return e.final ? { title: 'Full time', text: scoreLine(m, e.score || [m.home.score ?? 0, m.away.score ?? 0]) } : { title: 'End of normal time', text: e.score ? scoreLine(m, e.score) : '' };
+    case 'end-et': return e.final ? { title: 'Full time, after extra time', text: scoreLine(m, e.score || [m.home.score ?? 0, m.away.score ?? 0]) } : { title: 'End of extra time', text: e.score ? scoreLine(m, e.score) : '' };
     case 'so-goal': return { title: 'Shoot-out', text: `${who(e.player)} scores.` };
     case 'so-miss': return { title: 'Shoot-out', text: `${who(e.player)} misses.` };
-    case 'end': return m.state === 'post' ? { title: 'Full time', text: scoreLine(m, [m.home.score ?? 0, m.away.score ?? 0]) } : { title: 'End of normal time', text: scoreLine(m, [m.home.score ?? 0, m.away.score ?? 0]) };
+    case 'end': return { title: m.pens ? 'Full time, after penalties' : 'Full time', text: `${scoreLine(m, e.score || [m.home.score ?? 0, m.away.score ?? 0])}.${pensLine()}`.replace(/\.\./, '.') };
     default: return { title: '', text: '' };
   }
 }
 
-// The score at half-time, worked out from the goals before it (for the half-time line)
+const PHASES = ['ht', 'et-ht', 'end-90', 'end-et', 'end'];
+const ENDS = ['end-90', 'end-et', 'end'];
+// The score at each break and whistle, worked out from the goals before it, and which whistle
+// was the final one (normal time, extra time or after penalties)
 export function withHalfTimeScore(m) {
   let last = [0, 0];
+  const goalsKnown = (m.events || []).some((e) => e.score) || !(m.events || []).some((e) => ['goal', 'pen-goal', 'own-goal'].includes(e.kind));
   for (const e of m.events || []) {
-    if (e.score) last = e.score;
-    if (e.kind === 'ht') e.score = last;
+    if (['goal', 'pen-goal', 'own-goal'].includes(e.kind) && e.score) last = e.score;
+    if (PHASES.includes(e.kind)) { delete e.final; if (goalsKnown) e.score = last; }
   }
+  if (m.state === 'post') { const lastEnd = [...(m.events || [])].reverse().find((e) => ENDS.includes(e.kind)); if (lastEnd) lastEnd.final = true; }
   return m;
 }
 
-export const ICON = { goal: '⚽', 'pen-goal': '⚽', 'own-goal': '⚽', 'pen-miss': '✕', yellow: '', 'second-yellow': '', red: '', sub: '⇄', var: 'VAR', kickoff: '▶', ht: 'HT', '2h': '▶', et: 'ET', shootout: 'P', 'so-goal': '●', 'so-miss': '○', end: 'FT' };
+export const ICON = { goal: '⚽', 'pen-goal': '⚽', 'own-goal': '⚽', 'pen-miss': '✕', yellow: '', 'second-yellow': '', red: '', sub: '⇄', var: 'VAR', kickoff: '▶', ht: 'HT', '2h': '▶', et: 'ET', shootout: 'P', 'so-goal': '●', 'so-miss': '○', 'et-ht': 'ET', 'et-2h': 'ET', 'end-90': 'FT', 'end-et': 'FT', end: 'FT' };
 
 /** The action feed, newest first, as HTML. `ours` is the Liverpool side ('home'/'away'). */
 export function feedHtml(m, { ours = 'home', fresh = new Set() } = {}) {
@@ -76,7 +93,20 @@ export function inMatchWindow(kickoffs, now = Date.now()) {
 
 // "57'", "HT", "FT", or the kick-off time
 export function clockLabel(m) {
-  if (m.state === 'in') return m.halftime || /^HT$/i.test(m.detail) ? 'HT' : (m.detail || m.clock || 'LIVE').replace(/'\+(\d+)'/, "+$1'");
-  if (m.state === 'post') return m.postponed ? m.detail || 'Off' : 'FT';
+  if (m.state === 'in') {
+    if (m.etBreak) return 'ET HT';
+    return m.halftime || /^HT$/i.test(m.detail) ? 'HT' : (m.detail || m.clock || 'LIVE').replace(/'\+(\d+)'/, "+$1'");
+  }
+  if (m.state === 'post') {
+    if (m.postponed) return m.detail || 'Off';
+    if (/pen/i.test(m.detail || '') || m.pens) return 'Pens';
+    if (/aet|extra/i.test(m.detail || '')) return 'AET';
+    return 'FT';
+  }
   return '';
+}
+// The clock in words, for the scoreboard
+export function clockWords(m) {
+  const c = clockLabel(m);
+  return { HT: 'Half-time', 'ET HT': 'Extra-time break', FT: 'Full time', AET: 'After extra time', Pens: 'After penalties' }[c] || c;
 }

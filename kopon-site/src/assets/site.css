@@ -837,7 +837,7 @@ body.opp-open .opp-tab { visibility: hidden; }
 .lv-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: start; }
 .lv-team { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; }
 .lv-crest { display: block; width: 56px; height: 56px; object-fit: contain; }
-.lv-name { font-weight: 700; font-size: 18px; line-height: 1.2; overflow-wrap: anywhere; display: inline-flex; align-items: center; gap: 6px; }
+.lv-name { font-weight: 700; font-size: 18px; line-height: 1.2; overflow-wrap: break-word; hyphens: auto; display: inline-flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; max-width: 100%; }
 .lv-scorers { list-style: none; margin: 0; padding: 0; font-size: 13px; color: var(--muted); line-height: 1.5; }
 .lv-score { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 10px; min-width: 120px; padding-top: 6px; }
 .lv-num { font-family: var(--display); font-size: clamp(52px, 10vw, 76px); line-height: 1; color: #fff; font-variant-numeric: tabular-nums; }
@@ -890,6 +890,14 @@ body.opp-open .opp-tab { visibility: hidden; }
   .lv-name { font-size: 15px; }
   .lv-score { min-width: 96px; }
   .lv-ev { grid-template-columns: 46px 26px minmax(0, 1fr); gap: 8px; }
+}
+@media (max-width: 400px) {
+  .lv-row { gap: 6px; }
+  .lv-score { min-width: 78px; }
+  .lv-num { font-size: 44px; }
+  .lv-dash { font-size: 28px; }
+  .lv-name { font-size: 14px; }
+  .lv-pre .lv-ko { font-size: 36px; }
 }
 
 /* the LIVE strip under the header on every page */

@@ -3,7 +3,7 @@
 // answer between everyone, so this stays cheap however many people are watching.
 import { formationSlots, pitchPos, PITCH_LINES } from './fans-core.js';
 import { face, esc } from './fans-ui.js';
-import { feedHtml, withHalfTimeScore, pollSeconds, clockLabel, describe } from './live-core.js';
+import { feedHtml, withHalfTimeScore, pollSeconds, clockLabel, clockWords, describe } from './live-core.js';
 
 const app = document.getElementById('live-app');
 if (app) {
@@ -57,15 +57,17 @@ if (app) {
       return `<div class="lv-board lv-quiet">
 <p class="lv-meta">No Liverpool match on right now</p>
 ${n ? `<p class="lv-next">Next: <strong>${esc(n.home.short)} v ${esc(n.away.short)}</strong>, ${esc(n.comp || '')}${n.tbc ? `, ${esc(ukDay(n.date))} (kick-off time to be confirmed)` : `, ${esc(ukDay(n.date))} at ${esc(ukTime(n.date))}`}</p>
-${n.tbc ? '' : `<p class="lv-count">Live coverage starts an hour before kick-off, ${esc(until(new Date(Date.parse(n.date) - 3600000).toISOString()) || 'soon')}.</p>`}` : ''}
+${n.tbc ? '' : `<p class="lv-count">Live coverage starts 75 minutes before kick-off, ${esc(until(new Date(Date.parse(n.date) - 75 * 60000).toISOString()) || 'soon')}.</p>`}` : ''}
 ${m.last && m.last.hs != null ? `<p class="lv-last">Last time out: ${esc(m.last.home.short)} ${m.last.hs}–${m.last.as} ${esc(m.last.away.short)}</p>` : ''}
 </div>`;
     }
     const live = m.state === 'in';
     const clock = clockLabel(m);
-    const mid = m.state === 'pre'
+    const mid = m.postponed && m.home.score == null
+      ? `<div class="lv-score lv-pre"><span class="lv-clock">${esc(m.detail || 'Postponed')}</span></div>`
+      : m.state === 'pre'
       ? `<div class="lv-score lv-pre"><span class="lv-ko">${esc(ukTime(m.kickoff))}</span><span class="lv-clock">Kick-off ${esc(until(m.kickoff) || 'soon')}</span></div>`
-      : `<div class="lv-score"><span class="lv-num" id="lv-h">${m.home.score ?? 0}</span><span class="lv-dash">–</span><span class="lv-num" id="lv-a">${m.away.score ?? 0}</span><span class="lv-clock${live ? ' is-live' : ''}">${live && clock !== 'HT' ? '<span class="lv-dot" aria-hidden="true"></span>' : ''}${esc(clock === 'HT' ? 'Half-time' : clock === 'FT' ? 'Full time' : clock)}</span>${m.pens ? `<span class="lv-pens">${m.pens[0]}–${m.pens[1]} on penalties</span>` : ''}</div>`;
+      : `<div class="lv-score"><span class="lv-num" id="lv-h">${m.home.score ?? 0}</span><span class="lv-dash">–</span><span class="lv-num" id="lv-a">${m.away.score ?? 0}</span><span class="lv-clock${live ? ' is-live' : ''}">${live && !/HT/.test(clock) ? '<span class="lv-dot" aria-hidden="true"></span>' : ''}${esc(clockWords(m))}</span>${m.pens ? `<span class="lv-pens">${m.pens[0]}–${m.pens[1]} on penalties</span>` : ''}</div>`;
     const team = (t, s) => `<div class="lv-team lv-${s}">${crest(t)}<span class="lv-name">${esc(t.short || t.name)}${reds(m, s) ? `<span class="lv-card lv-card-r" title="${reds(m, s)} sent off" aria-label="${reds(m, s)} sent off"></span>` : ''}</span>${scorers(m, s)}</div>`;
     return `<div class="lv-board${live ? ' is-live' : ''}">
 <p class="lv-meta">${esc([m.comp, m.venue].filter(Boolean).join(' · '))}</p>
@@ -142,13 +144,16 @@ ${lu.subs?.length ? `<h3 class="h3">Substitutes</h3><ul class="lv-list">${list(l
       const ourGoal = (m.events || []).find((e) => fresh.has(e.id) && ['goal', 'pen-goal', 'own-goal'].includes(e.kind) && (e.for || e.team) === ours);
       if (ourGoal) { const b = $('lv-board').firstElementChild; b?.classList.add('is-goal'); setTimeout(() => b?.classList.remove('is-goal'), 6000); }
     }
-    const score = m.state === 'in' || m.state === 'post' ? `${m.home.short} ${m.home.score ?? 0}–${m.away.score ?? 0} ${m.away.short}${m.state === 'in' ? ` (${clockLabel(m)})` : ' (FT)'} | ` : '';
+    const score = m.postponed ? `${m.home.short} v ${m.away.short} (${m.detail || 'postponed'}) | ` : m.state === 'in' || m.state === 'post' ? `${m.home.short} ${m.home.score ?? 0}–${m.away.score ?? 0} ${m.away.short} (${clockLabel(m)}) | ` : '';
     document.title = score ? `${score}Kop On! live` : baseTitle;
     $('lv-updated').textContent = m.updated ? `Updated ${new Date(m.updated).toLocaleTimeString('en-GB')}${m.state === 'in' ? ' · refreshes every 30 seconds' : ''}` : '';
   }
 
+  let busy = false;
   async function load() {
     clearTimeout(timer);
+    if (busy) return; // one check at a time (e.g. switching tabs while a check is under way)
+    busy = true;
     lastFetch = Date.now();
     let next = 60;
     try {
@@ -172,6 +177,8 @@ ${lu.subs?.length ? `<h3 class="h3">Substitutes</h3><ul class="lv-list">${list(l
       $('lv-note').textContent = data ? 'Live updates are paused for a moment; trying again…' : "Couldn't load the live match just now; trying again…";
       next = Math.min(120, 20 * failures);
     }
+    busy = false;
+    clearTimeout(timer);
     if (!document.hidden) timer = setTimeout(load, next * 1000);
   }
 

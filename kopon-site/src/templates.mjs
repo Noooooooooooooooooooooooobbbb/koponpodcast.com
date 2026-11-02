@@ -162,7 +162,10 @@ function layoutInner(ctx, page, content) {
   const ver = config.verification || {};
   const nav = [['Episodes', '/episodes/'], ['News', '/news/'], ['Live', '/live/'], ['Stats', '/stats/'], ['Fan zone', '/fans/'], ['Community', '/community/']];
   // kick-off times for the LIVE strip ("d:" = date only, time not fixed yet)
-  const kickoffs = (ctx.stats?.next || []).map((n) => (n.tbc ? `d:${new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date(n.date))}` : n.date)).filter(Boolean).join(',');
+  // (also a match on, or just played, when the page was built: the site rebuilds during and after matches)
+  const built = ctx.builtAt ? new Date(ctx.builtAt).getTime() : Date.now();
+  const recent = [ctx.stats?.inPlay, ...(ctx.stats?.results || []).map((r) => r.date)].filter((d) => d && Number.isFinite(Date.parse(d)) && built - Date.parse(d) < 4 * 3600000 && built >= Date.parse(d) - 3600000);
+  const kickoffs = [...new Set([...recent, ...(ctx.stats?.next || []).map((n) => (n.tbc ? `d:${new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(new Date(n.date))}` : n.date))])].filter(Boolean).join(',');
   const jsonLd = [...(page.jsonLd || []), ...(crumbs ? [crumbs] : [])].map((j) => `<script type="application/ld+json">${jsonForScript(j)}</script>`).join('\n');
   const scripts = [
     `<script src="${assets['player.js']}" defer></script>`,

@@ -897,6 +897,11 @@ def main():
                 ctx = fan_context(browser, 390, 844, when=iso(100)); page = ctx.new_page()
                 page.goto(BASE + '/live/', wait_until='networkidle'); page.wait_for_selector('.lv-num', timeout=8000)
                 check(page.evaluate("document.documentElement.scrollWidth <= innerWidth") and page.locator('#lv-xi .spot').count() == 11, 'live @390: no sideways scrolling, line-up on the pitch')
+                ctx.close()
+                ctx = fan_context(browser, 360, 740, when=iso(100)); page = ctx.new_page()
+                page.goto(BASE + '/live/', wait_until='networkidle'); page.wait_for_selector('.lv-num', timeout=8000)
+                names = page.evaluate("[...document.querySelectorAll('.lv-board .lv-name')].map(n => [n.textContent, Math.round(n.getBoundingClientRect().height)])")
+                check(all(h <= 24 for _, h in names) and page.evaluate("document.documentElement.scrollWidth <= innerWidth"), f'live @360: team names on one line, never split mid-word {names}')
                 page.screenshot(path=str(SHOTS / 'live_82min_390.png'), full_page=True)
                 ctx.close()
                 lp = get('/live/')[1]

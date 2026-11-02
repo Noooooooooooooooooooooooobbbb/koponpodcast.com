@@ -18,7 +18,9 @@ function show(m) {
   navLive?.classList.toggle('is-live', m.state === 'in');
   if (!on || store.get(`kopon:strip:${m.id}:${m.state}`)) { strip?.remove(); strip = null; return; }
   const h = m.home.short || m.home.name, a = m.away.short || m.away.name;
-  const text = m.state === 'pre'
+  const text = m.postponed
+    ? `<span class="ls-tag">${esc(m.detail || 'Postponed')}</span><span class="ls-match">${esc(h)} v ${esc(a)}</span>`
+    : m.state === 'pre'
     ? `<span class="ls-tag">Today</span><span class="ls-match">${esc(h)} v ${esc(a)}</span><span class="ls-clock">${esc(ukTime(m.kickoff))}</span>`
     : `<span class="ls-tag${m.state === 'in' ? ' is-live' : ''}">${m.state === 'in' ? '<span class="lv-dot" aria-hidden="true"></span>Live' : 'Result'}</span><span class="ls-match">${esc(h)} <b>${m.home.score ?? 0}–${m.away.score ?? 0}</b> ${esc(a)}</span><span class="ls-clock">${esc(clockLabel(m))}</span>`;
   if (!strip) {
@@ -32,8 +34,14 @@ function show(m) {
   strip.querySelector('.ls-close').addEventListener('click', () => { store.set(`kopon:strip:${m.id}:${m.state}`, '1'); strip.remove(); strip = null; });
 }
 
+let busy = false, last = 0;
 async function check() {
   clearTimeout(timer);
+  if (busy) return;
+  busy = true; last = Date.now();
+  try { await checkNow(); } finally { busy = false; }
+}
+async function checkNow() {
   if (!inMatchWindow(kickoffs)) { strip?.remove(); strip = null; timer = setTimeout(check, 5 * 60000); return; }
   let wait = 60;
   try {
@@ -46,6 +54,7 @@ async function check() {
 }
 
 if (kickoffs.length && !document.getElementById('live-app')) {
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); else clearTimeout(timer); });
+  // coming back to the tab: check again, but not more than every 15 seconds
+  document.addEventListener('visibilitychange', () => { if (document.hidden) clearTimeout(timer); else if (Date.now() - last > 15000) check(); else { clearTimeout(timer); timer = setTimeout(check, 15000); } });
   check();
 }

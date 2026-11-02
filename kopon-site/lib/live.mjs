@@ -22,9 +22,10 @@ export function eventKind(k) {
   const t = `${k?.type?.type || ''} ${k?.type?.text || ''}`.toLowerCase();
   if (/start-delay|end-delay|\bdelay\b/.test(t)) return null; // injury stoppages: not shown
   // penalty shoot-out kicks are not goals in the match
-  if (k?.shootout) return /(miss|saved|save)/.test(t) ? 'so-miss' : (k.scoringPlay || /scored|goal/.test(t)) ? 'so-goal' : null;
+  const missed = /(miss|saved|save|woodwork|post|crossbar|bar\b|wide|over)/;
+  if (k?.shootout) return k.scoringPlay || (/scored|goal/.test(t) && !missed.test(t)) ? 'so-goal' : missed.test(t) ? 'so-miss' : null;
   if (/own.?goal/.test(t)) return 'own-goal';
-  if (/penalty/.test(t) && /(miss|saved|save)/.test(t)) return 'pen-miss';
+  if (/penalty/.test(t) && !k?.scoringPlay && !/shootout/.test(t)) return missed.test(t) ? 'pen-miss' : null;
   if (k?.scoringPlay || /\bgoal\b/.test(t)) {
     if (/disallow|cancel|ruled out/.test(t)) return 'var';
     return /penalty/.test(t) ? 'pen-goal' : 'goal';
@@ -35,11 +36,16 @@ export function eventKind(k) {
   if (/substitution/.test(t)) return 'sub';
   if (/\bvar\b/.test(t)) return 'var';
   if (/kickoff|kick-off/.test(t)) return 'kickoff';
+  // extra time first: "halftime-extra-time" is not the normal half-time
+  if (/half.?time.?extra.?time|extra.?time.?half.?time/.test(t)) return 'et-ht';
+  if (/start.?2nd.?half.?extra.?time/.test(t)) return 'et-2h';
+  if (/start.?extra.?time/.test(t)) return 'et';
+  if (/end.?extra.?time/.test(t)) return 'end-et';
+  if (/shootout/.test(t)) return /end/.test(t) ? 'end' : 'shootout';
   if (/halftime|half-time/.test(t)) return 'ht';
   if (/start.?2nd.?half|second half begins/.test(t)) return '2h';
-  if (/start.?extra.?time|extra.?time.?(first|second)?.?half.?(begins|start)/.test(t)) return 'et';
-  if (/shootout/.test(t)) return 'shootout';
-  if (/end.?regular.?time|end.?extra.?time|full.?time|match.?ends|end-game/.test(t)) return 'end';
+  if (/end.?regular.?time/.test(t)) return 'end-90';
+  if (/end.?match|full.?time|match.?ends|end-game/.test(t)) return 'end';
   return null;
 }
 
@@ -140,7 +146,9 @@ export function liveSummary(sum, ev = {}) {
   const scoreKnown = home.score != null && away.score != null;
   const fits = [tally(true), tally(false)].find((x) => !scoreKnown || (x.h === home.score && x.a === away.score));
   if (fits) for (const [e, sc, scorer] of fits.marks) { e.score = sc; e.for = scorer; }
-  if (!scoreKnown && state !== 'pre') { home.score = fits.h; away.score = fits.a; }
+  const postponed = /postpon|cancel|abandon|suspend/i.test(`${st.name || ''} ${st.description || ''}`);
+  if (!scoreKnown && state !== 'pre' && !postponed) { home.score = fits.h; away.score = fits.a; }
+  if (postponed && !events.some((e) => e.kind === 'kickoff')) { home.score = null; away.score = null; }
 
   const status = comp.status || {};
   return {
@@ -149,7 +157,9 @@ export function liveSummary(sum, ev = {}) {
     detail: st.shortDetail || st.detail || '', // "34'", "HT", "FT", "Postponed"
     clock: status.displayClock || '', period: status.period || null,
     halftime: /half.?time/i.test(`${st.name || ''} ${st.description || ''}`),
-    postponed: /postpon|cancel|abandon|suspend/i.test(`${st.name || ''} ${st.description || ''}`),
+    // the break before the second half of extra time
+    etBreak: /half.?time/i.test(`${st.name || ''} ${st.description || ''}`) && ((status.period || 0) >= 3 || /extra|_et\b|overtime/i.test(`${st.name || ''} ${st.description || ''}`)),
+    postponed,
     venue: sum?.gameInfo?.venue?.fullName || ev.venue || '',
     home, away, events,
     pens: shootout(H) != null && shootout(A) != null && (shootout(H) || shootout(A)) ? [shootout(H), shootout(A)] : null,
