@@ -2,8 +2,9 @@
 import { esc } from '../lib/text.mjs';
 import { layout } from './templates.mjs';
 
-// The default table: [tackles, interceptions, clearances, shots blocked, recoveries, minutes]. Minutes are always the last number.
-const METRICS = [['Minutes', null], ['Tackles', [0]], ['Interceptions', [1]], ['Clearances', [2]], ['Shots blocked', [3]], ['Recoveries', [4]], ['Tackles + interceptions', [0, 1]]];
+// The default table: [tackles, interceptions, clearances, (not shown), recoveries, minutes]. Minutes are always the last number.
+// The fourth number is StatMuse's "shots blocked": the player's OWN shots that a defender blocked, so it is not a defensive stat and is left out.
+const METRICS = [['Minutes', null], ['Tackles', [0]], ['Interceptions', [1]], ['Clearances', [2]], ['Recoveries', [4]], ['Tackles + interceptions', [0, 1]]];
 const per90 = (v, mins) => (mins > 0 ? (v * 90) / mins : 0);
 const num = (n) => (Number.isInteger(n) ? n.toLocaleString('en-GB') : n.toFixed(2));
 // A feature has one table (players at the top level) or several (tables: [{ heading, metrics, players, marks }])
@@ -61,9 +62,10 @@ ${featureTable(f, t)}
   return layout(ctx, { path, active: '/stats/', title: f.title, crumbTitle: f.short || f.title, description: f.description, jsonLd }, content);
 }
 
-// Links from the Stats page
+// Shown at the top of the Stats page: each article's headline with a short teaser, newest first
 export function featureLinks(features) {
   if (!features?.length) return '';
-  return `<section class="block" aria-labelledby="features-h"><div class="section-head"><h2 id="features-h">Stats features</h2></div>
-<ul class="thread-list">${features.map((f) => `<li><a href="${featurePath(f)}"><strong>${esc(f.short || f.title)}</strong><span>${esc(fmtDate(f.date))}</span></a></li>`).join('')}</ul></section>`;
+  const list = [...features].sort((a, b) => String(b.date).localeCompare(String(a.date)));
+  return `<section class="block features" aria-labelledby="features-h"><div class="section-head"><h2 id="features-h">Stats articles</h2></div>
+<div class="rooms">${list.map((f) => `<article class="room"><a href="${featurePath(f)}"><h3>${esc(f.title)}</h3><p>${esc(f.teaser || f.description)}</p><span class="go"><time datetime="${esc(f.date)}">${esc(fmtDate(f.date))}</time> · Read the article →</span></a></article>`).join('')}</div></section>`;
 }

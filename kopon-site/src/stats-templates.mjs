@@ -199,11 +199,12 @@ export function statsPage(ctx) {
 <p class="lede">Fixtures, results, tables and the numbers behind ${esc(st?.team?.name || 'Liverpool')}'s season. Pick a match for a full preview.</p>
 </div>`;
   if (!st) {
-    return layout(ctx, { path: '/stats/', active: '/stats/', title: 'Stats', description: 'Liverpool FC fixtures, results, tables and stats.', jsonLd: [pageLd(ctx, 'Stats', '/stats/')] }, `${head}<div class="wrap"><p class="stats-empty">The stats are having a breather and will be back after the next update.</p></div>`);
+    return layout(ctx, { path: '/stats/', active: '/stats/', title: 'Stats', description: 'Liverpool FC fixtures, results, tables and stats.', jsonLd: [pageLd(ctx, 'Stats', '/stats/')] }, `${head}<div class="wrap stats">${featureLinks(ctx.features)}<p class="stats-empty">The stats are having a breather and will be back after the next update.</p></div>`);
   }
   const content = `${head}
 <div class="wrap stats">
-<div class="stats-top">
+${featureLinks(ctx.features)}
+<div class="stats-top"${ctx.features?.length ? ' style="margin-top:64px"' : ''}>
 <section aria-labelledby="next-h"><div class="section-head"><h2 id="next-h">Next ${st.next.length > 1 ? st.next.length : ''} ${st.next.length === 1 ? 'match' : 'matches'}</h2></div>${nextCards(ctx)}</section>
 <section aria-labelledby="results-h"><div class="section-head"><h2 id="results-h">Results</h2></div>${resultsList(ctx)}</section>
 </div>
@@ -213,7 +214,6 @@ ${st.tables?.ucl ? `<section class="block" aria-labelledby="ucl-h"><div class="s
 ${rankRows(ctx)}
 ${playersSection(ctx)}
 ${scorersList(ctx)}
-${featureLinks(ctx.features)}
 ${sourcesNote(ctx)}
 </div>`;
   return layout(ctx, { path: '/stats/', active: '/stats/', title: 'Stats', description: `${st.team.name} fixtures, results, the Premier League and Champions League tables, and team and player stats.`, stats: true, jsonLd: [pageLd(ctx, 'Liverpool FC stats', '/stats/')] }, content);

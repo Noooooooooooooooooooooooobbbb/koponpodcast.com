@@ -29,7 +29,7 @@ test('features: Gravenberch table is ranked by the four-season rate', () => {
   assert.deepEqual(groups.Tackles.map((r) => r.player), ['Mac Allister', 'Jones', 'Gravenberch', 'Szoboszlai']);
   assert.deepEqual(groups.Interceptions.map((r) => [r.player, r.rate.toFixed(2)]), [['Gravenberch', '1.43'], ['Mac Allister', '0.82'], ['Jones', '0.62'], ['Szoboszlai', '0.60']]);
   assert.deepEqual(groups.Clearances.map((r) => r.player), ['Gravenberch', 'Mac Allister', 'Szoboszlai', 'Jones']);
-  assert.deepEqual(groups['Shots blocked'].map((r) => r.player), ['Szoboszlai', 'Mac Allister', 'Jones', 'Gravenberch']);
+  assert.equal(groups['Shots blocked'], undefined, 'own shots blocked is not a defensive stat');
   assert.deepEqual(groups.Recoveries.map((r) => [r.player, r.rate.toFixed(2)]), [['Jones', '5.87'], ['Szoboszlai', '5.61'], ['Mac Allister', '5.26'], ['Gravenberch', '4.83']]);
   assert.deepEqual(groups['Tackles + interceptions'].map((r) => [r.player, r.total, r.rate.toFixed(2)]), [['Mac Allister', 343, '3.58'], ['Gravenberch', 284, '3.36'], ['Jones', 143, '2.59'], ['Szoboszlai', 191, '2.05']]);
   // a season cell: total and rate
@@ -40,7 +40,7 @@ test('features: Gravenberch table is ranked by the four-season rate', () => {
 test('features: links for the Stats page', () => {
   assert.equal(featureLinks([]), '');
   const html = featureLinks(features);
-  for (const f of features) assert.ok(html.includes(`href="${featurePath(f)}"`));
+  for (const f of features) { assert.ok(html.includes(`href="${featurePath(f)}"`)); assert.ok(f.teaser && html.includes(f.teaser.slice(0, 40)), 'each article has a teaser on the Stats page'); }
 });
 
 test('features: six midfielders, both tables ranked', () => {

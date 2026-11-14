@@ -932,3 +932,5 @@ body.opp-open .opp-tab { visibility: hidden; }
 .ftable tr.us > td, .ftable tr.us > .c-name { background: rgba(200, 16, 46, 0.16); }
 .ftable tr.us > .c-all { background: rgba(200, 16, 46, 0.3); }
 .ftable tr.us .c-name { color: #fff; font-weight: 700; }
+.features .rooms { margin-top: 16px; }
+.features .room h3 { font-size: 26px; line-height: 1.1; }

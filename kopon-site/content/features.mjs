@@ -1,5 +1,6 @@
 // Stats features: short written pieces with a table, published at /stats/<slug>/ and linked from the Stats page.
-// Each player's seasons are [tackles, interceptions, clearances, shots blocked, recoveries, minutes]; null = no data.
+// Each player's seasons are [tackles, interceptions, clearances, own shots blocked (not shown), recoveries, minutes]; null = no data.
+// `teaser` is the short summary shown under the headline at the top of the Stats page.
 // A feature with several tables lists them under `tables`; a table can name its own `metrics` (minutes always last). Newest feature first.
 export default [
   {
@@ -8,6 +9,7 @@ export default [
     short: 'Six midfielders compared',
     date: '2026-11-14',
     description: 'Lamine Camara, Arthur Avom, Alex Scott and Manu Koné measured against Szoboszlai and Gravenberch in defence and attack, and the one we would sign for Liverpool.',
+    teaser: 'Camara, Avom, Scott and Koné measured against Szoboszlai and Gravenberch, in defence and in attack. One of them wins the ball more than anyone here and creates more than everyone except Szoboszlai: he is our pick to sign.',
     lede: 'We measured four midfielders Liverpool could sign (Lamine Camara, Arthur Avom, Alex Scott and Manu Koné) against Dominik Szoboszlai and Ryan Gravenberch, in defence and in attack. Our pick is Lamine Camara.',
     body: [
       ['Our pick: Lamine Camara', [
@@ -68,7 +70,8 @@ export default [
     title: 'Gravenberch v the midfield: the defensive numbers',
     short: 'Gravenberch v the midfield',
     date: '2026-11-14',
-    description: "Ryan Gravenberch's tackles, interceptions, clearances, blocks and recoveries against Szoboszlai, Mac Allister and Curtis Jones over four league seasons.",
+    description: "Ryan Gravenberch's tackles, interceptions, clearances and recoveries against Szoboszlai, Mac Allister and Curtis Jones over four league seasons.",
+    teaser: 'Four league seasons of tackles, interceptions, clearances and recoveries. Gravenberch reads the game better than Szoboszlai, Mac Allister and Jones, but he comes last for winning the ball back.',
     lede: 'How does Ryan Gravenberch’s defensive work stack up against Dominik Szoboszlai, Alexis Mac Allister and Curtis Jones? We put four league seasons side by side.',
     body: [
       ['How to read it', [
@@ -76,8 +79,8 @@ export default [
       ]],
       ['What it shows', [
         'Gravenberch leads the group for interceptions (1.43 per 90) and clearances (1.60 per 90): the reading-the-game numbers you want from a number six. He is second for tackles and interceptions combined.',
-        'Mac Allister is the tackler, with 2.76 per 90, although his rate dropped sharply in 2025–26. Szoboszlai blocks the most shots (0.81 per 90) and Jones wins the ball back most often (5.87 recoveries per 90).',
-        'Where Gravenberch comes last is recoveries (4.83 per 90) and shots blocked (0.35 per 90). His recoveries fell from 5.50 to 3.82 per 90 between 2024–25 and 2025–26.',
+        'Mac Allister is the tackler, with 2.76 per 90, although his rate dropped sharply in 2025–26. Jones wins the ball back most often (5.87 recoveries per 90), ahead of Szoboszlai (5.61).',
+        'Where Gravenberch comes last is recoveries (4.83 per 90). They fell from 5.50 to 3.82 per 90 between 2024–25 and 2025–26.',
       ]],
     ],
     seasons: ['2023–24', '2024–25', '2025–26', '2026–27'],
