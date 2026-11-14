@@ -2,17 +2,20 @@
 import { esc } from '../lib/text.mjs';
 import { layout } from './templates.mjs';
 
+// The default table: [tackles, interceptions, clearances, shots blocked, recoveries, minutes]. Minutes are always the last number.
 const METRICS = [['Minutes', null], ['Tackles', [0]], ['Interceptions', [1]], ['Clearances', [2]], ['Shots blocked', [3]], ['Recoveries', [4]], ['Tackles + interceptions', [0, 1]]];
-const EMPTY = [0, 0, 0, 0, 0, 0];
 const per90 = (v, mins) => (mins > 0 ? (v * 90) / mins : 0);
-const num = (n) => n.toLocaleString('en-GB');
+const num = (n) => (Number.isInteger(n) ? n.toLocaleString('en-GB') : n.toFixed(2));
+// A feature has one table (players at the top level) or several (tables: [{ heading, metrics, players, marks }])
+export const featureTables = (f) => f.tables || [{ players: f.players, marks: f.marks, metrics: f.metrics }];
 
 // One block of rows per stat, players ranked by the all-seasons rate (minutes by total)
 export function featureRows(f) {
-  return METRICS.map(([name, idx]) => {
+  return (f.metrics || METRICS).map(([name, idx]) => {
     const rows = Object.entries(f.players).map(([player, raw]) => {
-      const seasons = raw.map((s) => s || EMPTY);
-      const mins = seasons.map((s) => s[5]);
+      const width = raw.find(Boolean).length;
+      const seasons = raw.map((s) => s || new Array(width).fill(0));
+      const mins = seasons.map((s) => s[width - 1]);
       const totalMins = mins.reduce((a, b) => a + b, 0);
       const vals = idx ? seasons.map((s) => idx.reduce((a, i) => a + s[i], 0)) : mins;
       const total = vals.reduce((a, b) => a + b, 0);
@@ -25,8 +28,8 @@ export function featureRows(f) {
 
 const cell = (c) => (c ? `${num(c.v)}${c.rate === null ? '' : ` <span class="per">(${c.rate.toFixed(2)})</span>`}${esc(c.mark)}` : '–');
 
-function featureTable(f) {
-  const groups = featureRows(f);
+function featureTable(f, t) {
+  const groups = featureRows(t);
   return `<div class="table-wrap"><table class="ftable">
 <thead><tr><th scope="col" class="c-stat">Stat</th><th scope="col">Rank</th><th scope="col" class="c-name">Player</th>${f.seasons.map((s) => `<th scope="col">${esc(s)}</th>`).join('')}<th scope="col" class="c-all">All seasons</th></tr></thead>
 ${groups.map((g) => `<tbody>${g.rows.map((r, i) => `<tr${r.player === f.highlight ? ' class="us"' : ''}>${i === 0 ? `<th scope="rowgroup" rowspan="${g.rows.length}" class="c-stat">${esc(g.name)}</th>` : ''}<td class="c-rank">${i + 1}</td><th scope="row" class="c-name">${esc(r.player)}</th>${r.cells.map((c) => `<td>${cell(c)}</td>`).join('')}<td class="c-all">${num(r.total)}${r.rate === null ? '' : ` <span class="per">(${r.rate.toFixed(2)})</span>`}</td></tr>`).join('\n')}</tbody>`).join('\n')}
@@ -47,11 +50,11 @@ export function featurePage(ctx, f) {
 </div>
 <div class="wrap feature">
 <div class="notes">${f.body.map(([h, paras]) => `<h3>${esc(h)}</h3>${paras.map((p) => `<p>${esc(p)}</p>`).join('')}`).join('')}</div>
-<section class="block" aria-labelledby="ft-h"><div class="section-head"><h2 id="ft-h">The numbers</h2></div>
+${featureTables(f).map((t, i) => `<section class="block" aria-labelledby="ft-h${i}"><div class="section-head"><h2 id="ft-h${i}">${esc(t.heading || 'The numbers')}</h2></div>
 <p class="fine">Season total, with the rate per 90 minutes in brackets.${f.highlight ? ` ${esc(f.highlight)} is highlighted.` : ''} On a phone, swipe the table sideways.</p>
-${featureTable(f)}
-${f.notes.map((n) => `<p class="fine" style="margin:12px 0 0">${esc(n)}</p>`).join('')}
-</section>
+${featureTable(f, t)}
+</section>`).join('\n')}
+<div class="feature-notes">${f.notes.map((n) => `<p class="fine" style="margin:12px 0 0">${esc(n)}</p>`).join('')}</div>
 <p style="margin-top:40px"><a href="/stats/">← All stats</a></p>
 </div>`;
   const jsonLd = [{ '@context': 'https://schema.org', '@type': 'Article', headline: f.title, datePublished: f.date, url: ctx.config.siteUrl + path, author: { '@type': 'Organization', name: ctx.config.title }, isPartOf: { '@id': `${ctx.config.siteUrl}/#podcast` } }];
