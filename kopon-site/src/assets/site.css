@@ -915,3 +915,20 @@ body.opp-open .opp-tab { visibility: hidden; }
 .ls-close { flex: none; width: 44px; height: 44px; border: 0; background: none; color: var(--muted); font-size: 22px; cursor: pointer; border-radius: 10px; }
 .ls-close:hover { color: #fff; background: var(--bg-3); }
 .site-nav a.is-live::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--red); vertical-align: 1px; animation: lv-pulse 1.6s infinite; }
+
+/* stats features (/stats/<slug>/): a ranked table grouped by stat */
+.feature .notes { margin-top: 40px; }
+.ftable { width: 100%; min-width: 860px; border-collapse: collapse; font-size: 15px; font-variant-numeric: tabular-nums; }
+.ftable th, .ftable td { padding: 10px 12px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; font-weight: 400; }
+.ftable thead th { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; background: var(--bg-3); }
+.ftable .c-stat { text-align: left; vertical-align: top; white-space: normal; width: 150px; font-weight: 700; color: #fff; }
+.ftable thead .c-stat { color: var(--muted); font-weight: 600; }
+.ftable .c-name { text-align: left; font-weight: 500; }
+.ftable .c-rank { text-align: center; color: var(--muted); }
+.ftable .c-all { font-weight: 700; color: #fff; background: var(--bg-3); }
+.ftable thead .c-all { color: var(--gold); }
+.ftable .per { color: var(--gold); }
+.ftable tbody tr:first-child > * { border-top: 2px solid var(--line-2); }
+.ftable tr.us > td, .ftable tr.us > .c-name { background: rgba(200, 16, 46, 0.16); }
+.ftable tr.us > .c-all { background: rgba(200, 16, 46, 0.3); }
+.ftable tr.us .c-name { color: #fff; font-weight: 700; }

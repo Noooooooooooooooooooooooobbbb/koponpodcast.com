@@ -21,6 +21,8 @@ import * as T from '../src/templates.mjs';
 import { statsPage, previewPage } from '../src/stats-templates.mjs';
 import { fansHub, lineupPage, ratingsPage, fansJson, ratePath } from '../src/fans-templates.mjs';
 import { livePage } from '../src/live-templates.mjs';
+import { featurePage, featurePath } from '../src/feature-templates.mjs';
+import features from '../content/features.mjs';
 import { buildStats } from '../lib/stats/index.mjs';
 import { episodeArt } from '../lib/art.mjs';
 import { changedUrls } from '../lib/indexnow.mjs';
@@ -278,7 +280,7 @@ export async function build(options = {}) {
 
   const ownPhotos = await copyOwnPhotos(outDir, config, log);
   const stats = await loadStats(config, live, fetchImpl, env, builtAt, log, ownPhotos);
-  const ctx = { config, show, episodes, news, assets, comments, builtAt, stats: stats.data };
+  const ctx = { config, show, episodes, news, assets, comments, builtAt, stats: stats.data, features };
 
   await writeOut(outDir, 'index.html', T.homePage(ctx));
   await writeOut(outDir, 'episodes/index.html', T.episodesPage(ctx));
@@ -296,6 +298,11 @@ export async function build(options = {}) {
   } catch (err) {
     console.warn(`  stats pages failed (${err.message}); publishing a placeholder`);
     await writeOut(outDir, 'stats/index.html', statsPage({ ...ctx, stats: null }));
+  }
+  // Written stats features (content/features.mjs); one that fails is left out and the rest of the site still publishes
+  const featurePages = [];
+  for (const f of features) {
+    try { await writeOut(outDir, `stats/${f.slug}/index.html`, featurePage(ctx, f)); featurePages.push(f); } catch (err) { console.warn(`  stats feature "${f.slug}" failed (${err.message}); left out`); }
   }
   if (stats.file) await writeOut(outDir, 'stats-cache.json', stats.file);
   // The fan zone (line-up picker and player ratings)
@@ -324,6 +331,7 @@ export async function build(options = {}) {
   const urls = [
     ['/', episodes[0].dateIso], ['/episodes/', episodes[0].dateIso], ['/news/', today], ['/live/', today], ['/stats/', today], ['/community/', today],
     ...previews.map((p) => [`/stats/${p.slug}/`, today]),
+    ...featurePages.map((f) => [featurePath(f), f.date]),
     ['/fans/', today], ['/fans/lineup/', today], ...ratePages.map((p) => [p, today]),
     ...config.rooms.map((r) => [`/community/${r.slug}/`, today]),
     ...episodes.map((ep) => [`/episodes/${ep.slug}/`, ep.dateIso, ep.art]),

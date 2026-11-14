@@ -2,6 +2,7 @@
 // Everything that came from an API is escaped with esc().
 import { esc, jsonForScript, slugify } from '../lib/text.mjs';
 import { layout, commentsBlock } from './templates.mjs';
+import { featureLinks } from './feature-templates.mjs';
 
 // ---- formatting ----------------------------------------------------------------------
 const UK = (opts) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', ...opts });
@@ -212,6 +213,7 @@ ${st.tables?.ucl ? `<section class="block" aria-labelledby="ucl-h"><div class="s
 ${rankRows(ctx)}
 ${playersSection(ctx)}
 ${scorersList(ctx)}
+${featureLinks(ctx.features)}
 ${sourcesNote(ctx)}
 </div>`;
   return layout(ctx, { path: '/stats/', active: '/stats/', title: 'Stats', description: `${st.team.name} fixtures, results, the Premier League and Champions League tables, and team and player stats.`, stats: true, jsonLd: [pageLd(ctx, 'Liverpool FC stats', '/stats/')] }, content);
