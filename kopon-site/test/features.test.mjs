@@ -12,7 +12,7 @@ test('features: every feature has what its page needs', () => {
     assert.match(f.date, /^\d{4}-\d{2}-\d{2}$/);
     for (const k of ['title', 'description', 'lede']) assert.ok(f[k]);
     for (const t of featureTables(f)) {
-      const width = Math.max(...(t.metrics || [[0, [4]]]).flatMap(([, idx]) => idx || [0])) + 2;
+      const width = Math.max(...(t.metrics || [[0, [4]]]).flatMap(([, idx]) => idx?.pct || idx || [0])) + 2;
       for (const [name, seasons] of Object.entries(t.players)) {
         assert.equal(seasons.length, f.seasons.length, name);
         for (const s of seasons) if (s) assert.equal(s.length, width, name);
@@ -54,6 +54,11 @@ test('features: six midfielders, both tables ranked', () => {
   assert.deepEqual(att['Chances created'].map((r) => r.player), ['Szoboszlai', 'Camara', 'Avom', 'Scott', 'Koné', 'Gravenberch']);
   assert.deepEqual(att['Dribbles completed'].map((r) => [r.player, r.rate.toFixed(2)])[0], ['Koné', '1.24']);
   assert.deepEqual(att['Touches in opposition box'].map((r) => [r.player, r.rate.toFixed(2)])[5], ['Camara', '0.66']);
-  assert.equal(att['xG + xA'][0].total.toFixed(2), '36.80');
+  assert.equal(att['xG + xA'], undefined);
+  assert.equal(att.Shots, undefined);
+  assert.deepEqual(att['Passes completed'].map((r) => [r.player, r.total, r.rate.toFixed(2)]), [['Avom', 1566, '50.44'], ['Szoboszlai', 4511, '48.34'], ['Gravenberch', 3892, '45.99'], ['Camara', 3604, '45.97'], ['Koné', 3285, '41.86'], ['Scott', 1997, '35.51']]);
+  assert.deepEqual(att['Pass completion'].map((r) => [r.player, r.total.toFixed(1)]), [['Koné', '89.8'], ['Gravenberch', '88.6'], ['Szoboszlai', '87.0'], ['Camara', '86.4'], ['Avom', '85.5'], ['Scott', '84.1']]);
+  assert.equal(att['Pass completion'][3].cells[0].v.toFixed(1), '80.5');
+  assert.equal(att['Pass completion'][4].cells[0], null);
   assert.deepEqual(att.Minutes.map((r) => r.total), def.Minutes.map((r) => r.total), 'both tables use the same minutes');
 });

@@ -14,12 +14,12 @@ export default [
     body: [
       ['Our pick: Lamine Camara', [
         'The Monaco midfielder is the best all-rounder of the four. Of all six players he ranks first for tackles (2.81 per 90), recoveries (7.37) and tackles and interceptions combined (4.20), and second for interceptions (1.39), just behind Gravenberch.',
-        'He is not only a ball-winner. Only Szoboszlai beats him for goals and assists (0.28 per 90), expected goals and assists (0.25) and chances created (1.66). That is 6 goals and 16 assists in 7,056 league minutes since 2023–24.',
+        'He is not only a ball-winner. Only Szoboszlai beats him for goals and assists (0.28 per 90) and chances created (1.66). That is 6 goals and 16 assists in 7,056 league minutes since 2023–24.',
       ]],
       ['Why not the others?', [
-        'Alex Scott is the runner-up and the safer choice, because he has done it in the Premier League. He makes the most clearances of the six (2.06 per 90) and is second for recoveries, shots, shots on target and touches in the box. But 7 goals and assists in 5,062 minutes (0.12 per 90) is the lowest return here apart from Avom’s.',
-        'Arthur Avom tackles almost as much as Camara (2.64 per 90, and 3.90 tackles and interceptions), but we only have 2,794 Ligue 1 minutes to judge him on and he has the lowest rate of goals and assists, shots and shots on target.',
-        'Manu Koné is the best dribbler in the group (1.24 completed per 90), but he is fifth or sixth of six for tackles, interceptions, clearances and recoveries.',
+        'Alex Scott is the runner-up and the safer choice, because he has done it in the Premier League. He makes the most clearances of the six (2.06 per 90) and is second for recoveries, shots on target and touches in the box. But 7 goals and assists in 5,062 minutes (0.12 per 90) is the lowest return here apart from Avom’s.',
+        'Arthur Avom tackles almost as much as Camara (2.64 per 90, and 3.90 tackles and interceptions), but we only have 2,794 Ligue 1 minutes to judge him on and he has the lowest rate of goals and assists and of shots on target. He does see a lot of the ball: his 50.4 completed passes per 90 is the most of the six.',
+        'Manu Koné is the best dribbler in the group (1.24 completed per 90) and the most accurate passer (89.8%), but he is fifth or sixth of six for tackles, interceptions, clearances and recoveries.',
       ]],
       ['What Camara would add', [
         'Szoboszlai is Liverpool’s best attacking midfielder by a distance, but he is last of the six for tackles and interceptions (2.05 per 90). Gravenberch reads the game well, but he is last for recoveries (4.83). Camara wins the ball more often than either, and creates almost twice as many chances as Gravenberch (1.66 against 0.87).',
@@ -45,22 +45,23 @@ export default [
       },
       {
         heading: 'Attacking',
-        // [goals, assists, shots, shots on target, chances created, xG, xA, dribbles completed, touches in the box, minutes]
-        metrics: [['Minutes', null], ['Goals + assists', [0, 1]], ['xG + xA', [5, 6]], ['Shots', [2]], ['Shots on target', [3]], ['Chances created', [4]], ['Dribbles completed', [7]], ['Touches in opposition box', [8]]],
+        // [goals, assists, shots, shots on target, chances created, xG, xA, dribbles completed, touches in the box, passes completed, passes attempted, minutes]
+        // { pct: [a, b] } is a percentage (a out of b), ranked on the all-seasons figure
+        metrics: [['Minutes', null], ['Goals + assists', [0, 1]], ['Passes completed', [9]], ['Pass completion', { pct: [9, 10] }], ['Shots on target', [3]], ['Chances created', [4]], ['Dribbles completed', [7]], ['Touches in opposition box', [8]]],
         players: {
-        Szoboszlai: [[3, 2, 60, 15, 55, 3.74, 5.07, 22, 76, 2106], [6, 6, 67, 23, 55, 7.18, 6.01, 20, 107, 2491], [6, 7, 71, 23, 75, 4.64, 6.98, 24, 68, 3231], [1, 1, 15, 5, 18, 1.55, 1.63, 3, 1, 571]],
-        Gravenberch: [[1, 0, 23, 8, 14, 1.98, 1.37, 24, 44, 1121], [0, 4, 20, 5, 26, 1.11, 3.38, 35, 28, 3159], [5, 3, 38, 13, 29, 1.76, 2.3, 29, 31, 2992], [0, 1, 5, 2, 5, 0.13, 0.17, 4, 2, 344]],
-        Camara: [[1, 4, 30, 9, 41, 2.18, 2.72, 25, 11, 2255], [2, 7, 26, 9, 45, 2.3, 5.01, 11, 17, 2054], [3, 4, 25, 4, 34, 1.98, 4.24, 16, 21, 1847], [0, 1, 8, 2, 10, 0.44, 0.7, 8, 3, 900]],
-        Avom: [null, null, [2, 1, 21, 6, 31, 1.1, 3.05, 22, 37, 2118], [0, 0, 6, 0, 10, 0.26, 1.25, 4, 7, 676]],
-        Scott: [[1, 1, 15, 4, 22, 0.73, 1.1, 14, 29, 1012], [0, 0, 15, 7, 11, 0.75, 1.05, 6, 17, 756], [3, 1, 44, 13, 23, 3.75, 2.98, 24, 50, 2849], [1, 0, 7, 1, 11, 0.63, 0.43, 4, 15, 445]],
-        'Koné': [[1, 0, 24, 8, 24, 1.16, 0.77, 33, 36, 1561], [2, 1, 34, 9, 19, 3.03, 1.56, 28, 45, 2572], [2, 3, 21, 5, 25, 1.89, 2.63, 28, 43, 2456], [2, 0, 9, 3, 7, 1.06, 0.45, 8, 11, 473]],
+          Szoboszlai: [[3, 2, 60, 15, 55, 3.74, 5.07, 22, 76, 1210, 1385, 2106], [6, 6, 67, 23, 55, 7.18, 6.01, 20, 107, 1052, 1227, 2491], [6, 7, 71, 23, 75, 4.64, 6.98, 24, 68, 1921, 2193, 3231], [1, 1, 15, 5, 18, 1.55, 1.63, 3, 1, 328, 382, 571]],
+          Gravenberch: [[1, 0, 23, 8, 14, 1.98, 1.37, 24, 44, 408, 489, 1121], [0, 4, 20, 5, 26, 1.11, 3.38, 35, 28, 1699, 1900, 3159], [5, 3, 38, 13, 29, 1.76, 2.3, 29, 31, 1649, 1848, 2992], [0, 1, 5, 2, 5, 0.13, 0.17, 4, 2, 136, 157, 344]],
+          Camara: [[1, 4, 30, 9, 41, 2.18, 2.72, 25, 11, 705, 876, 2255], [2, 7, 26, 9, 45, 2.3, 5.01, 11, 17, 1198, 1369, 2054], [3, 4, 25, 4, 34, 1.98, 4.24, 16, 21, 1078, 1248, 1847], [0, 1, 8, 2, 10, 0.44, 0.7, 8, 3, 623, 678, 900]],
+          Avom: [null, null, [2, 1, 21, 6, 31, 1.1, 3.05, 22, 37, 1086, 1287, 2118], [0, 0, 6, 0, 10, 0.26, 1.25, 4, 7, 480, 544, 676]],
+          Scott: [[1, 1, 15, 4, 22, 0.73, 1.1, 14, 29, 341, 422, 1012], [0, 0, 15, 7, 11, 0.75, 1.05, 6, 17, 280, 326, 756], [3, 1, 44, 13, 23, 3.75, 2.98, 24, 50, 1167, 1374, 2849], [1, 0, 7, 1, 11, 0.63, 0.43, 4, 15, 209, 253, 445]],
+          'Koné': [[1, 0, 24, 8, 24, 1.16, 0.77, 33, 36, 586, 687, 1561], [2, 1, 34, 9, 19, 3.03, 1.56, 28, 45, 1157, 1268, 2572], [2, 3, 21, 5, 25, 1.89, 2.63, 28, 43, 1261, 1393, 2456], [2, 0, 9, 3, 7, 1.06, 0.45, 8, 11, 281, 309, 473]],
         },
       },
     ],
     notes: [
       'Szoboszlai and Gravenberch (Liverpool), Lamine Camara (Metz in 2023–24, then Monaco), Arthur Avom (Lorient), Alex Scott (Bournemouth), Manu Koné (Borussia Mönchengladbach in 2023–24, then Roma).',
       'Domestic league matches only (Premier League, Ligue 1, Serie A and the Bundesliga). 2026–27 is the season so far, so those samples are small.',
-      'Avom has no figures before 2025–26, when Lorient were promoted to Ligue 1. “xG + xA” is expected goals plus expected assists.',
+      'Avom has no figures before 2025–26, when Lorient were promoted to Ligue 1. Pass completion is ranked on the percentage across all seasons.',
       'Totals from StatMuse; per-90 rates worked out by Kop On!',
     ],
     sourceUrl: 'https://www.statmuse.com/fc',

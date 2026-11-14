@@ -18,6 +18,13 @@ export function featureRows(f) {
       const seasons = raw.map((s) => s || new Array(width).fill(0));
       const mins = seasons.map((s) => s[width - 1]);
       const totalMins = mins.reduce((a, b) => a + b, 0);
+      if (idx?.pct) {
+        // a percentage (for example passes completed out of passes attempted): shown as "87.4%" and ranked on the all-seasons figure
+        const [a, b] = idx.pct;
+        const pct = (x, y) => (y > 0 ? (100 * x) / y : 0);
+        const total = pct(seasons.reduce((n, s) => n + s[a], 0), seasons.reduce((n, s) => n + s[b], 0));
+        return { player, key: total, total, rate: null, pct: true, cells: seasons.map((s, i) => (raw[i] ? { v: pct(s[a], s[b]), rate: null, pct: true, mark: f.marks?.[player]?.[i] || '' } : null)) };
+      }
       const vals = idx ? seasons.map((s) => idx.reduce((a, i) => a + s[i], 0)) : mins;
       const total = vals.reduce((a, b) => a + b, 0);
       const rate = idx ? per90(total, totalMins) : null;
@@ -27,13 +34,13 @@ export function featureRows(f) {
   });
 }
 
-const cell = (c) => (c ? `${num(c.v)}${c.rate === null ? '' : ` <span class="per">(${c.rate.toFixed(2)})</span>`}${esc(c.mark)}` : '–');
+const cell = (c) => (c ? `${c.pct ? `${c.v.toFixed(1)}%` : num(c.v)}${c.rate === null ? '' : ` <span class="per">(${c.rate.toFixed(2)})</span>`}${esc(c.mark)}` : '–');
 
 function featureTable(f, t) {
   const groups = featureRows(t);
   return `<div class="table-wrap"><table class="ftable">
 <thead><tr><th scope="col" class="c-stat">Stat</th><th scope="col">Rank</th><th scope="col" class="c-name">Player</th>${f.seasons.map((s) => `<th scope="col">${esc(s)}</th>`).join('')}<th scope="col" class="c-all">All seasons</th></tr></thead>
-${groups.map((g) => `<tbody>${g.rows.map((r, i) => `<tr${r.player === f.highlight ? ' class="us"' : ''}>${i === 0 ? `<th scope="rowgroup" rowspan="${g.rows.length}" class="c-stat">${esc(g.name)}</th>` : ''}<td class="c-rank">${i + 1}</td><th scope="row" class="c-name">${esc(r.player)}</th>${r.cells.map((c) => `<td>${cell(c)}</td>`).join('')}<td class="c-all">${num(r.total)}${r.rate === null ? '' : ` <span class="per">(${r.rate.toFixed(2)})</span>`}</td></tr>`).join('\n')}</tbody>`).join('\n')}
+${groups.map((g) => `<tbody>${g.rows.map((r, i) => `<tr${r.player === f.highlight ? ' class="us"' : ''}>${i === 0 ? `<th scope="rowgroup" rowspan="${g.rows.length}" class="c-stat">${esc(g.name)}</th>` : ''}<td class="c-rank">${i + 1}</td><th scope="row" class="c-name">${esc(r.player)}</th>${r.cells.map((c) => `<td>${cell(c)}</td>`).join('')}<td class="c-all">${r.pct ? `<span class="per">${r.total.toFixed(1)}%</span>` : num(r.total)}${r.rate === null ? '' : ` <span class="per">(${r.rate.toFixed(2)})</span>`}</td></tr>`).join('\n')}</tbody>`).join('\n')}
 </table></div>`;
 }
 
@@ -52,7 +59,7 @@ export function featurePage(ctx, f) {
 <div class="wrap feature">
 <div class="notes">${f.body.map(([h, paras]) => `<h3>${esc(h)}</h3>${paras.map((p) => `<p>${esc(p)}</p>`).join('')}`).join('')}</div>
 ${featureTables(f).map((t, i) => `<section class="block" aria-labelledby="ft-h${i}"><div class="section-head"><h2 id="ft-h${i}">${esc(t.heading || 'The numbers')}</h2></div>
-<p class="fine">Season total, with the rate per 90 minutes in brackets.${f.highlight ? ` ${esc(f.highlight)} is highlighted.` : ''} On a phone, swipe the table sideways.</p>
+<p class="fine">Season total, with the rate per 90 minutes in brackets${(t.metrics || []).some(([, i]) => i?.pct) ? ' (percentages are shown on their own)' : ''}.${f.highlight ? ` ${esc(f.highlight)} is highlighted.` : ''} On a phone, swipe the table sideways.</p>
 ${featureTable(f, t)}
 </section>`).join('\n')}
 <div class="feature-notes">${f.notes.map((n) => `<p class="fine" style="margin:12px 0 0">${esc(n)}</p>`).join('')}</div>
